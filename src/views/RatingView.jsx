@@ -3,6 +3,8 @@ import { Star, ArrowLeft, Send } from 'lucide-react';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
 
+const MAX_FOOD_PRICE_EUR = 80;
+
 export const RatingView = ({ onTabChange }) => {
   const { currentProduct, addReview } = useShop();
   const { currentUser, requireAuth } = useAuth();
@@ -15,6 +17,7 @@ export const RatingView = ({ onTabChange }) => {
   const [dupeTarget, setDupeTarget] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [priceError, setPriceError] = useState('');
 
   const stores = ['Aldi', 'Lidl', 'Rewe', 'Edeka', 'Penny', 'Kaufland', 'dm'];
 
@@ -40,7 +43,15 @@ export const RatingView = ({ onTabChange }) => {
       return;
     }
 
+    const parsedPrice = price ? Number.parseFloat(price) : null;
+
+    if (parsedPrice !== null && (Number.isNaN(parsedPrice) || parsedPrice < 0 || parsedPrice > MAX_FOOD_PRICE_EUR)) {
+      setPriceError(`Bitte gib einen Preis zwischen 0 und ${MAX_FOOD_PRICE_EUR} Euro ein.`);
+      return;
+    }
+
     setIsSubmitting(true);
+    setPriceError('');
 
     try {
       const review = {
@@ -50,7 +61,7 @@ export const RatingView = ({ onTabChange }) => {
         image: currentProduct.image,
         rating,
         comment,
-        price: price ? parseFloat(price) : null,
+        price: parsedPrice,
         store,
         isDupe,
         dupeTarget: isDupe ? dupeTarget : null,
@@ -72,10 +83,42 @@ export const RatingView = ({ onTabChange }) => {
       }, 1500);
     } catch (error) {
       console.error('Fehler beim Speichern:', error);
-      alert('Fehler beim Speichern der Bewertung');
+      alert(error?.message || 'Fehler beim Speichern der Bewertung');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handlePriceChange = (event) => {
+    const nextValue = event.target.value;
+
+    if (nextValue === '') {
+      setPrice('');
+      setPriceError('');
+      return;
+    }
+
+    const parsedValue = Number.parseFloat(nextValue);
+
+    if (Number.isNaN(parsedValue)) {
+      setPrice(nextValue);
+      return;
+    }
+
+    if (parsedValue > MAX_FOOD_PRICE_EUR) {
+      setPrice(String(MAX_FOOD_PRICE_EUR));
+      setPriceError(`Maximal ${MAX_FOOD_PRICE_EUR} Euro sind erlaubt.`);
+      return;
+    }
+
+    if (parsedValue < 0) {
+      setPrice('0');
+      setPriceError('Der Preis darf nicht negativ sein.');
+      return;
+    }
+
+    setPrice(nextValue);
+    setPriceError('');
   };
 
   return (
@@ -160,12 +203,16 @@ export const RatingView = ({ onTabChange }) => {
               type="number"
               step="0.01"
               min="0"
+              max={MAX_FOOD_PRICE_EUR}
               value={price}
-              onChange={(e) => setPrice(e.target.value)}
+              onChange={handlePriceChange}
               placeholder="z.B. 2,99"
               className="flex-1 px-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
             />
           </div>
+          {priceError && (
+            <p className="mt-2 text-xs font-medium text-red-500">{priceError}</p>
+          )}
         </div>
 
         {/* Store */}

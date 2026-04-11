@@ -25,6 +25,7 @@ import {
 import { useAuth } from './useAuth';
 
 const ShopContext = createContext();
+const MAX_FOOD_PRICE_EUR = 80;
 
 const parsePriceValue = (value) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -263,6 +264,12 @@ export const ShopProvider = ({ children }) => {
   };
 
   const addReview = useCallback(async (review, authUser = null) => {
+    const parsedPrice = parsePriceValue(review.price);
+
+    if (parsedPrice !== null && (parsedPrice < 0 || parsedPrice > MAX_FOOD_PRICE_EUR)) {
+      throw new Error(`Der Preis muss zwischen 0 und ${MAX_FOOD_PRICE_EUR} Euro liegen.`);
+    }
+
     const reviewPayload = {
       productId: review.productId,
       productName: review.productName || 'Unbekanntes Produkt',
@@ -270,7 +277,7 @@ export const ShopProvider = ({ children }) => {
       image: review.image || '',
       rating: review.rating || 0,
       comment: review.comment || '',
-      price: parsePriceValue(review.price),
+      price: parsedPrice,
       store: review.store || null,
       isDupe: Boolean(review.isDupe),
       dupeTarget: review.isDupe ? review.dupeTarget || null : null,
