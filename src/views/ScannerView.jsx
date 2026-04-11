@@ -1,0 +1,165 @@
+// FILE: src/views/ScannerView.jsx
+import React, { useState } from 'react';
+import { Scanner } from '@yudiel/react-qr-scanner';
+import { useShop } from '../context/useShop';
+import { Plus } from 'lucide-react';
+
+export const ScannerView = ({ onTabChange }) => {
+  const { fetchProductByBarcode, setCurrentProduct } = useShop();
+  const [manualCode, setManualCode] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Wird aufgerufen, wenn der Scanner was findet
+  const handleScan = async (detectedCodes) => {
+    // Die Library gibt ein Array zurück, wir nehmen den ersten Code
+    if (detectedCodes && detectedCodes.length > 0) {
+      const code = detectedCodes[0].rawValue;
+      console.log("✅ Scanner hat gefunden:", code);
+      
+      // Verhindern, dass er 100x pro Sekunde scannt
+      setIsLoading(true);
+      setErrorMsg('');
+      
+      try {
+        const product = await fetchProductByBarcode(code);
+        setIsLoading(false);
+
+        if (product) {
+          setCurrentProduct(product);
+          setTimeout(() => onTabChange('rate'), 300);
+        }
+      } catch (error) {
+        console.error('❌ Fehler beim Laden:', error);
+        setErrorMsg(`Produkt ${code} nicht gefunden.`);
+        setIsLoading(false);
+      }
+    }
+  };
+
+  // Wird aufgerufen, wenn wir manuell tippen
+  const handleManualSubmit = async (e) => {
+    e.preventDefault();
+    if (!manualCode.trim()) return;
+
+    setIsLoading(true);
+    setErrorMsg('');
+    
+    try {
+      const product = await fetchProductByBarcode(manualCode);
+      setIsLoading(false);
+
+      if (product) {
+        setCurrentProduct(product);
+        setManualCode('');
+        setTimeout(() => onTabChange('rate'), 300);
+      }
+    } catch (error) {
+      console.error('❌ Fehler:', error);
+      setErrorMsg('Produkt nicht gefunden. Versuche es erneut.');
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateManual = () => {
+    const emptyProduct = {
+      id: Date.now().toString(),
+      name: 'Neues Produkt',
+      brand: 'Eigene Eingabe',
+      image: 'https://via.placeholder.com/200?text=Kein+Bild',
+      nutriScore: null,
+      source: 'manual',
+    };
+    
+    setCurrentProduct(emptyProduct);
+    onTabChange('rate');
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-slate-50 text-slate-900 pb-24">
+      {/* Header */}
+      <div className="px-4 py-6 border-b border-slate-200">
+        <h2 className="text-2xl font-bold text-center text-emerald-600">📷 Barcode Scanner</h2>
+        <p className="text-center text-slate-500 text-sm mt-2">Halte einen Barcode vor die Kamera</p>
+      </div>
+
+      {/* Scanner View */}
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-6">
+        <div className="relative rounded-2xl overflow-hidden border-4 border-emerald-500/50 shadow-2xl w-full max-w-sm aspect-square bg-black">
+          {isLoading && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70">
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-500 border-t-transparent"></div>
+            </div>
+          )}
+          
+          <Scanner
+            onScan={handleScan}
+            formats={['ean_13', 'ean_8']} // WICHTIG: Nur Lebensmittel-Codes scannen!
+            components={{
+              audio: false, // Kein "Beep" Sound
+              onOff: true, // Zeigt einen An/Aus Button
+              finder: true // Zeigt den grünen Rahmen
+            }}
+            onError={(error) => console.log('Scanner Error:', error)} // Fehler leise loggen
+            styles={{
+              container: { width: '100%', height: '100%' },
+              video: { objectFit: 'cover' }
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="px-4 py-6 space-y-4 border-t border-slate-200">
+        {/* Error Message */}
+        {errorMsg && (
+          <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-center text-sm font-medium">
+            ❌ {errorMsg}
+          </div>
+        )}
+
+        {/* Manual Input */}
+        <form onSubmit={handleManualSubmit} className="space-y-3">
+          <p className="text-center text-slate-500 text-xs uppercase tracking-wider font-bold">Oder manuell eingeben</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Barcode eingeben (z.B. 4008400401829)"
+              value={manualCode}
+              onChange={(e) => setManualCode(e.target.value)}
+              className="flex-1 bg-white border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 transition-all"
+              disabled={isLoading}
+            />
+            <button 
+              type="submit"
+              disabled={isLoading || !manualCode.trim()}
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 text-white font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? '...' : 'Go'}
+            </button>
+          </div>
+        </form>
+
+        {/* Create Manual Product */}
+        <button
+          onClick={handleCreateManual}
+          className="w-full px-4 py-3 bg-white hover:bg-slate-50 border-2 border-slate-200 text-slate-700 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+        >
+          <Plus size={20} />
+          Neues Produkt erstellen
+        </button>
+
+        {/* Info */}
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs text-slate-600 space-y-2">
+          <p className="font-bold text-slate-800">💡 Tipps:</p>
+          <ul className="space-y-1">
+            <li>✓ Gute Beleuchtung ist wichtig</li>
+            <li>✓ Barcode sollte deutlich zu sehen sein</li>
+            <li>✓ Scanner funktioniert mit EAN-13 & EAN-8</li>
+            <li>✓ Manuelle Eingabe als Fallback</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};

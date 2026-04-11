@@ -1,0 +1,196 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Flame, ChevronRight, Loader2 } from 'lucide-react';
+import { useShop } from '../context/useShop';
+
+const CATEGORIES = [
+  { name: 'Snacks', emoji: '🍿', accent: 'from-amber-400 to-orange-500' },
+  { name: 'Getränke', emoji: '🥤', accent: 'from-sky-400 to-blue-500' },
+  { name: 'Kühlware', emoji: '🧊', accent: 'from-cyan-400 to-teal-500' },
+  { name: 'Vorrat', emoji: '🫙', accent: 'from-stone-400 to-stone-600' },
+  { name: 'Vegan', emoji: '🌱', accent: 'from-emerald-400 to-green-600' },
+];
+
+export const HypeView = () => {
+  const { getHypeProducts } = useShop();
+
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [hypeProducts, setHypeProducts] = useState([]);
+  const [lastVisibleDoc, setLastVisibleDoc] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
+  // Fetch first page whenever category changes
+  const fetchInitial = useCallback(async (cat) => {
+    setIsLoading(true);
+    setHypeProducts([]);
+    setLastVisibleDoc(null);
+    setHasMore(true);
+    try {
+      const { docs, lastDoc } = await getHypeProducts(cat, null);
+      setHypeProducts(docs);
+      setLastVisibleDoc(lastDoc);
+      if (docs.length < 10) setHasMore(false);
+    } catch (err) {
+      console.error('Fehler beim Laden der Hype-Produkte:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getHypeProducts]);
+
+  useEffect(() => {
+    fetchInitial(activeCategory);
+  }, [activeCategory, fetchInitial]);
+
+  // Load next 10
+  const loadMore = async () => {
+    if (!lastVisibleDoc || isLoading) return;
+    setIsLoading(true);
+    try {
+      const { docs, lastDoc } = await getHypeProducts(activeCategory, lastVisibleDoc);
+      setHypeProducts((prev) => [...prev, ...docs]);
+      setLastVisibleDoc(lastDoc);
+      if (docs.length < 10) setHasMore(false);
+    } catch (err) {
+      console.error('Fehler beim Nachladen:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCategoryClick = (name) => {
+    setActiveCategory((prev) => (prev === name ? null : name));
+  };
+
+  // ── Bento Grid Category Tiles ──
+  const renderBentoGrid = () => {
+    const featured = CATEGORIES[0]; // Snacks = large tile
+    const rest = CATEGORIES.slice(1);
+
+    return (
+      <div className="grid grid-cols-4 grid-rows-2 gap-3 px-5 mb-8">
+        {/* Large featured tile — spans 2 cols & 2 rows */}
+        <button
+          onClick={() => handleCategoryClick(featured.name)}
+          className={`col-span-2 row-span-2 rounded-squircle bg-gradient-to-br ${featured.accent} relative overflow-hidden flex flex-col justify-end p-4 transition-all duration-300 shadow-lg
+            ${activeCategory === featured.name ? 'ring-3 ring-realgreen ring-offset-2 scale-[0.97]' : 'hover:scale-[0.98]'}`}
+        >
+          <span className="text-5xl mb-2 drop-shadow-lg">{featured.emoji}</span>
+          <span className="text-white font-bold text-lg tracking-tight drop-shadow">{featured.name}</span>
+          {activeCategory === featured.name && (
+            <div className="absolute top-3 right-3 bg-white/30 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center">
+              <Flame size={14} className="text-white" />
+            </div>
+          )}
+        </button>
+
+        {/* Four compact tiles */}
+        {rest.map((cat) => (
+          <button
+            key={cat.name}
+            onClick={() => handleCategoryClick(cat.name)}
+            className={`col-span-1 row-span-1 rounded-squircle bg-gradient-to-br ${cat.accent} relative overflow-hidden flex flex-col items-center justify-center p-2 transition-all duration-300 shadow-md
+              ${activeCategory === cat.name ? 'ring-3 ring-realgreen ring-offset-2 scale-[0.95]' : 'hover:scale-[0.97]'}`}
+          >
+            <span className="text-2xl mb-1">{cat.emoji}</span>
+            <span className="text-white font-semibold text-[11px] tracking-tight leading-tight text-center drop-shadow">{cat.name}</span>
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  // ── Product Card ──
+  const renderProductCard = (product) => (
+    <div
+      key={product.id}
+      className="bg-white rounded-squircle shadow-[0_2px_12px_rgba(0,0,0,0.06)] flex items-center gap-4 p-3 transition-transform hover:scale-[1.01]"
+    >
+      <img
+        src={product.image || 'https://placehold.co/80x80?text=N/A'}
+        alt={product.name}
+        className="w-16 h-16 rounded-squircle object-cover bg-realbg flex-shrink-0"
+      />
+      <div className="flex-1 min-w-0">
+        <h3 className="font-semibold text-slate-900 text-sm truncate">{product.name}</h3>
+        <p className="text-xs text-slate-400 truncate">{product.brand}</p>
+      </div>
+      <div className="flex flex-col items-center gap-0.5 pr-1 flex-shrink-0">
+        <Flame size={18} className="text-realorange" />
+        <span className="text-xs font-bold text-slate-700">{product.reviewCount ?? 0}</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="pb-32 bg-realbg font-sans antialiased min-h-screen">
+      {/* Header */}
+      <div className="px-5 pt-8 mb-6 animate-slide-up">
+        <div className="flex items-center gap-2 mb-1">
+          <Flame size={22} className="text-realorange" />
+          <h1
+            className="text-2xl font-black text-realgreen tracking-tight"
+            style={{ fontFamily: 'Poppins, sans-serif' }}
+          >
+            Hype Check
+          </h1>
+        </div>
+        <p className="text-slate-500 text-sm font-medium">
+          Die beliebtesten Produkte der Community.
+        </p>
+      </div>
+
+      {/* Bento Category Filter */}
+      {renderBentoGrid()}
+
+      {/* Active filter pill */}
+      {activeCategory && (
+        <div className="px-5 mb-4 flex items-center gap-2">
+          <span className="text-xs text-slate-400 font-medium">Filter:</span>
+          <button
+            onClick={() => setActiveCategory(null)}
+            className="inline-flex items-center gap-1 bg-realgreen/10 text-realgreen text-xs font-semibold px-3 py-1 rounded-full transition-colors hover:bg-realgreen/20"
+          >
+            {activeCategory}
+            <span className="ml-1 text-[10px]">✕</span>
+          </button>
+        </div>
+      )}
+
+      {/* Product List */}
+      <div className="px-5 space-y-3">
+        {hypeProducts.map(renderProductCard)}
+
+        {isLoading && (
+          <div className="flex justify-center py-8">
+            <Loader2 size={28} className="text-realgreen animate-spin" />
+          </div>
+        )}
+
+        {!isLoading && hypeProducts.length === 0 && (
+          <div className="text-center py-16">
+            <span className="text-4xl mb-3 block">📭</span>
+            <p className="text-slate-400 text-sm font-medium">
+              Noch keine Produkte vorhanden.
+            </p>
+            <p className="text-slate-300 text-xs mt-1">
+              Scanne Produkte, um den Hype zu starten!
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Load More */}
+      {hasMore && hypeProducts.length > 0 && !isLoading && (
+        <div className="px-5 mt-6">
+          <button
+            onClick={loadMore}
+            className="w-full bg-white border-2 border-slate-200 rounded-squircle py-3.5 text-sm font-semibold text-slate-800 shadow-sm flex items-center justify-center gap-2 transition-all hover:shadow-md hover:border-slate-300 active:scale-95"
+          >
+            Weitere laden
+            <ChevronRight size={16} className="text-slate-600" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
