@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 const getDisplayScore = (score) => {
   const normalizedScore = Number.isFinite(score) ? score : 0;

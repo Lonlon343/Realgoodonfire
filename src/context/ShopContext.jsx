@@ -1,5 +1,5 @@
 // FILE: src/context/ShopContext.jsx
-import React, { createContext, useCallback, useEffect, useState } from 'react';
+import { createContext, useCallback, useEffect, useState } from 'react';
 import { MOCK_PRODUCTS, STORES } from '../data';
 import { db } from '../firebase';
 import {
@@ -570,7 +570,7 @@ export const ShopProvider = ({ children }) => {
     }
 
     if (!['up', 'down'].includes(type)) {
-      throw new Error('Ungueltiger Vote-Typ.');
+      throw new Error('Ungültiger Vote-Typ.');
     }
 
     const dupeRef = doc(db, 'dupes', dupeId);

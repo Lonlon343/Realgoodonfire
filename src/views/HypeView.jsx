@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Flame, ChevronRight, Loader2 } from 'lucide-react';
 import { ProductArtwork } from '../components/ProductArtwork';
 import { useShop } from '../context/useShop';

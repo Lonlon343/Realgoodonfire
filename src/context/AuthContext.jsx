@@ -1,5 +1,5 @@
 // FILE: src/context/AuthContext.jsx
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useState, useEffect, useCallback } from 'react';
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Star, ArrowLeft, Send } from 'lucide-react';
 import { ProductArtwork } from '../components/ProductArtwork';
 import { useShop } from '../context/useShop';

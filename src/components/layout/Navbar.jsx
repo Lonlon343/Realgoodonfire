@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Home, Flame, MessagesSquare, User, ScanBarcode } from 'lucide-react';
 
 export const Navbar = ({ activeTab, onTabChange }) => {

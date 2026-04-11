@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Flame, ArrowRightLeft, PencilLine, Star, ThumbsDown, ThumbsUp, User } from 'lucide-react';
 import { ProductDetailModal } from '../components/ProductDetailModal';
 import { ProductArtwork } from '../components/ProductArtwork';

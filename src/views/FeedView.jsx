@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ProductDetailModal } from '../components/ProductDetailModal';
 import { Star } from 'lucide-react';
 import { useShop } from '../context/useShop';

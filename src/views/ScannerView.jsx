@@ -1,5 +1,5 @@
 // FILE: src/views/ScannerView.jsx
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { useShop } from '../context/useShop';
 import { Plus } from 'lucide-react';

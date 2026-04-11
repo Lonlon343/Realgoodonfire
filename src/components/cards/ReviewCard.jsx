@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Star, Flame } from 'lucide-react';
 import { ProductArtwork } from '../ProductArtwork';
 

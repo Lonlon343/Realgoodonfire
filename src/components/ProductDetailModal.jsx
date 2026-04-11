@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MessageSquareText, Star, X } from 'lucide-react';
 import { ProductArtwork } from './ProductArtwork';
 import { useShop } from '../context/useShop';
@@ -311,7 +311,7 @@ export const ProductDetailModal = ({
                       disabled={isLoadingMore}
                       className="inline-flex rounded-squircle border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {isLoadingMore ? 'Laedt...' : 'Weitere 5 laden'}
+                      {isLoadingMore ? 'Lädt...' : 'Weitere 5 laden'}
                     </button>
                   </div>
                 ) : null}

@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Flame, ScanBarcode, ShieldCheck, Star, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
 import { useShop } from '../context/useShop';

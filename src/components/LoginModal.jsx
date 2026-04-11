@@ -1,5 +1,5 @@
 // FILE: src/components/LoginModal.jsx
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
 
