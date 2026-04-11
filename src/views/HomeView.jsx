@@ -1,21 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { Flame, ArrowRightLeft, Star, User } from 'lucide-react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Flame, ArrowRightLeft, PencilLine, Star, ThumbsDown, ThumbsUp, User } from 'lucide-react';
+import { ProductDetailModal } from '../components/ProductDetailModal';
+import { ProductArtwork } from '../components/ProductArtwork';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
+import { formatPriceDisplay, isDisplayablePrice, parsePriceValue } from '../utils/pricing';
 
 export const HomeView = ({ onTabChange }) => {
   const {
     getTrendingProducts,
     loadHomeData,
     newestProducts,
+    subscribeTopDupes,
     topDupes,
     recentReviews,
     isLoadingHome,
-    setCurrentProduct,
+    voteOnDupe,
   } = useShop();
-  const { currentUser: user, logout, setIsLoginModalOpen, clearAuthError } = useAuth();
+  const { currentUser: user, logout, setIsLoginModalOpen, clearAuthError, requireAuth } = useAuth();
   const [trendingProducts, setTrendingProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [votingState, setVotingState] = useState({});
+  const [detailProduct, setDetailProduct] = useState(null);
+  const dupeCardRefs = useRef(new Map());
+  const previousDupePositions = useRef(new Map());
 
   useEffect(() => {
     const loadTrending = async () => {
@@ -44,6 +52,60 @@ export const HomeView = ({ onTabChange }) => {
     loadHomeSections();
   }, [loadHomeData]);
 
+  useEffect(() => {
+    const unsubscribe = subscribeTopDupes?.();
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [subscribeTopDupes]);
+
+  useLayoutEffect(() => {
+    const nextPositions = new Map();
+
+    topDupes.forEach((dupe) => {
+      const cardElement = dupeCardRefs.current.get(dupe.id);
+
+      if (!cardElement) {
+        return;
+      }
+
+      const nextRect = cardElement.getBoundingClientRect();
+      const previousRect = previousDupePositions.current.get(dupe.id);
+
+      nextPositions.set(dupe.id, nextRect);
+
+      if (!previousRect) {
+        return;
+      }
+
+      const deltaY = previousRect.top - nextRect.top;
+
+      if (Math.abs(deltaY) < 1 || typeof cardElement.animate !== 'function') {
+        return;
+      }
+
+      cardElement.animate(
+        [
+          {
+            transform: `translateY(${deltaY}px) scale(0.985)`,
+            boxShadow: '0 22px 40px rgba(16, 185, 129, 0.12)',
+          },
+          {
+            transform: 'translateY(0) scale(1)',
+            boxShadow: 'inset 0px 2px 4px rgba(0,0,0,0.02)',
+          },
+        ],
+        {
+          duration: 420,
+          easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+        }
+      );
+    });
+
+    previousDupePositions.current = nextPositions;
+  }, [topDupes]);
+
   const renderPremiumStars = (rating) => {
     const normalizedRating = Math.round(rating || 0);
 
@@ -59,15 +121,6 @@ export const HomeView = ({ onTabChange }) => {
         ))}
       </div>
     );
-  };
-
-  const formatPrice = (price) => {
-    if (typeof price !== 'number') return 'Preis folgt';
-
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(price);
   };
 
   const formatTimeAgo = (timestamp) => {
@@ -106,6 +159,123 @@ export const HomeView = ({ onTabChange }) => {
     }
 
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(review.userName || 'Foodie')}&background=f8f9fa&color=333`;
+  };
+
+  const getVoteButtonClasses = (type, isActive, isBusy) => {
+    const activeClasses = type === 'up'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : 'border-[#F1C7B8] bg-[#FDE7DE] text-[#B45309]';
+    const idleClasses = type === 'up'
+      ? 'border-transparent text-slate-500 hover:border-emerald-100 hover:bg-emerald-50/80 hover:text-emerald-700'
+      : 'border-transparent text-slate-500 hover:border-[#F1C7B8] hover:bg-[#FDE7DE]/80 hover:text-[#B45309]';
+
+    return [
+      'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors',
+      isActive ? activeClasses : idleClasses,
+      isBusy ? 'cursor-wait opacity-60' : '',
+    ].join(' ');
+  };
+
+  const handleDupeVote = (dupeId, type) => {
+    requireAuth(async () => {
+      if (votingState[dupeId]) {
+        return;
+      }
+
+      setVotingState((prevState) => ({
+        ...prevState,
+        [dupeId]: type,
+      }));
+
+      try {
+        await voteOnDupe(dupeId, type);
+      } catch (error) {
+        console.error('Fehler beim Dupe-Vote:', error);
+        alert(error?.message || 'Dein Vote konnte nicht gespeichert werden.');
+      } finally {
+        setVotingState((prevState) => {
+          const nextState = { ...prevState };
+          delete nextState[dupeId];
+          return nextState;
+        });
+      }
+    });
+  };
+
+  const openProductDetail = (product) => {
+    if (!product?.id) {
+      return;
+    }
+
+    setDetailProduct(product);
+  };
+
+  const closeProductDetail = () => {
+    setDetailProduct(null);
+  };
+
+  const buildReviewProduct = (review) => ({
+    id: review.productId,
+    name: review.productName || 'Unbekanntes Produkt',
+    brand: review.brand || '',
+    image: review.image || '',
+    category: review.category || '',
+    price: review.price ?? null,
+    store: review.store || null,
+  });
+
+  const buildDupeProduct = (item, type) => type === 'original'
+    ? {
+        id: item.originalId,
+        name: item.originalName || 'Unbekanntes Produkt',
+        brand: item.originalBrand || '',
+        image: item.originalImage || '',
+        category: item.originalCategory || '',
+        price: item.originalPrice ?? null,
+      }
+    : {
+        id: item.dupeId,
+        name: item.dupeName || 'Unbekanntes Produkt',
+        brand: item.dupeBrand || '',
+        image: item.dupeImage || '',
+        category: item.dupeCategory || '',
+        price: item.dupePrice ?? null,
+      };
+
+  const onPriceEditClick = (productType, currentPrice) => {
+    window.prompt(
+      'Stimmt der Preis nicht? Neuen Preis vorschlagen:',
+      isDisplayablePrice(currentPrice) ? parsePriceValue(currentPrice).toFixed(2) : ''
+    );
+  };
+
+  const renderEditablePrice = (productType, price, toneClassName) => {
+    const hasPrice = isDisplayablePrice(price);
+
+    return (
+      <button
+        type="button"
+        onClick={() => onPriceEditClick(productType, price)}
+        className={[
+          'group inline-flex items-center gap-1 border-b border-dotted pb-0.5 text-sm font-bold transition-colors',
+          hasPrice ? `${toneClassName} border-current/35 hover:border-current/70` : 'border-slate-300 text-slate-400 hover:border-slate-400 hover:text-slate-600',
+        ].join(' ')}
+        title={`Preis für ${productType} vorschlagen`}
+      >
+        <span>{formatPriceDisplay(price)}</span>
+        <PencilLine size={11} className="opacity-0 transition-opacity group-hover:opacity-100" />
+      </button>
+    );
+  };
+
+  const setDupeCardRef = (dupeId, node) => {
+    if (node) {
+      dupeCardRefs.current.set(dupeId, node);
+      return;
+    }
+
+    dupeCardRefs.current.delete(dupeId);
+    previousDupePositions.current.delete(dupeId);
   };
 
   const renderNewestSkeletons = () => (
@@ -201,15 +371,23 @@ export const HomeView = ({ onTabChange }) => {
     }
   };
 
+  const handleWriteReviewFromDetail = () => {
+    setDetailProduct(null);
+    onTabChange('rate');
+  };
+
   return (
     <div className="pb-32 bg-[#FDFDFD] font-sans antialiased min-h-screen">
 
       {/* Header Area */}
       <div className="px-5 pt-8 animate-slide-up">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-black text-realgreen tracking-tight italic" style={{ fontFamily: 'Poppins, sans-serif' }}>
-            RealGood
-          </h1>
+          <div className="flex items-center gap-3">
+            <img src="/RealGoodLogo.svg" alt="" aria-hidden="true" className="h-20 w-20" />
+            <h1 className="text-3xl font-black text-realgreen tracking-tight italic" style={{ fontFamily: 'Poppins, sans-serif' }}>
+              RealGood
+            </h1>
+          </div>
           {!user ? (
             <button
               type="button"
@@ -289,17 +467,20 @@ export const HomeView = ({ onTabChange }) => {
             trendingProducts.slice(0, 5).map(product => (
               <button 
                 key={product.id}
-                onClick={() => {
-                  setCurrentProduct(product);
-                  onTabChange('community');
-                }}
+                type="button"
+                onClick={() => openProductDetail(product)}
                 className="relative w-64 h-80 flex-shrink-0 squircle overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.08)] group transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(16,185,129,0.15)] shimmer-bg bg-stone-100 text-left"
               >
                 <div className="absolute inset-0 flex items-center justify-center p-5 pb-24">
-                  <img
-                    src={product.image || "https://placehold.co/300x300?text=Kein+Bild"}
+                  <ProductArtwork
+                    src={product.image}
                     alt={product.name}
-                    className="max-h-full max-w-full object-contain drop-shadow-[0_16px_28px_rgba(0,0,0,0.22)] transition-transform duration-700 ease-out group-hover:scale-[1.02]"
+                    name={product.name}
+                    brand={product.brand}
+                    category={product.category}
+                    variant="hero"
+                    className="h-full w-full"
+                    imageClassName="max-h-full max-w-full object-contain drop-shadow-[0_16px_28px_rgba(0,0,0,0.22)] transition-transform duration-700 ease-out group-hover:scale-[1.02]"
                   />
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent"></div>
@@ -331,12 +512,22 @@ export const HomeView = ({ onTabChange }) => {
         {isLoadingHome ? renderNewestSkeletons() : newestProducts.length > 0 ? (
           <div className="grid grid-cols-2 gap-4">
             {newestProducts.map((product) => (
-              <div key={product.id} className="squircle bg-white shadow-sm border border-slate-100/60 overflow-hidden group hover:shadow-md transition-shadow">
+              <button
+                key={product.id}
+                type="button"
+                onClick={() => openProductDetail(product)}
+                className="w-full squircle bg-white shadow-sm border border-slate-100/60 overflow-hidden group hover:shadow-md transition-shadow text-left"
+              >
                 <div className="h-36 bg-[#F5F2EF] relative p-4 flex items-center justify-center shimmer-bg overflow-hidden">
-                  <img
-                    src={product.image || 'https://placehold.co/300x300?text=Neu'}
-                    className="max-h-full max-w-full object-contain filter drop-shadow-sm transition-transform duration-500 group-hover:scale-[1.02]"
+                  <ProductArtwork
+                    src={product.image}
                     alt={product.name}
+                    name={product.name}
+                    brand={product.brand}
+                    category={product.category}
+                    variant="card"
+                    className="h-full w-full"
+                    imageClassName="max-h-full max-w-full object-contain filter drop-shadow-sm transition-transform duration-500 group-hover:scale-[1.02]"
                   />
                 </div>
                 <div className="p-3.5">
@@ -350,7 +541,7 @@ export const HomeView = ({ onTabChange }) => {
                     </span>
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         ) : (
@@ -368,20 +559,38 @@ export const HomeView = ({ onTabChange }) => {
 
         {isLoadingHome ? renderDupeSkeletons() : topDupes.length > 0 ? (
           <div className="space-y-4">
-            {topDupes.map((item) => (
-              <div key={item.id} className="squircle bg-[#F3F4F6] p-5 shadow-[inset_0px_2px_4px_rgba(0,0,0,0.02)] border border-slate-200/50">
+            {topDupes.map((item) => {
+              const hasPriceComparison = isDisplayablePrice(item.originalPrice) && isDisplayablePrice(item.dupePrice);
+
+              return (
+                <div
+                  key={item.id}
+                  ref={(node) => setDupeCardRef(item.id, node)}
+                  className="squircle bg-[#F3F4F6] p-5 shadow-[inset_0px_2px_4px_rgba(0,0,0,0.02)] border border-slate-200/50 will-change-transform"
+                >
                 <div className="flex items-center justify-between mb-6 relative">
                   <div className="flex flex-col items-center w-2/5">
-                    <div className="w-[72px] h-[72px] bg-white squircle shadow-sm flex items-center justify-center mb-2 p-1.5 overflow-hidden">
-                      <img
-                        src={item.originalImage || 'https://placehold.co/200x200?text=Original'}
-                        className="max-h-full max-w-full object-contain rounded-[14px]"
-                        alt={item.originalName}
-                      />
-                    </div>
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest font-semibold mb-1">ORIGINAL</span>
-                    <span className="text-[13px] font-bold text-slate-800 text-center line-clamp-2">{item.originalName}</span>
-                    <span className="text-red-500 font-bold text-sm mt-0.5">{formatPrice(item.originalPrice)}</span>
+                      <button
+                        type="button"
+                        onClick={() => openProductDetail(buildDupeProduct(item, 'original'))}
+                        className="flex flex-col items-center text-center"
+                      >
+                        <div className="w-[72px] h-[72px] bg-white squircle shadow-sm flex items-center justify-center mb-2 p-1.5 overflow-hidden transition-transform hover:scale-[1.02]">
+                          <ProductArtwork
+                            src={item.originalImage}
+                            alt={item.originalName}
+                            name={item.originalName}
+                            brand={item.originalBrand}
+                            category={item.originalCategory}
+                            variant="card"
+                            className="h-full w-full rounded-[14px]"
+                            imageClassName="h-full w-full object-contain rounded-[14px]"
+                          />
+                        </div>
+                        <span className="text-[9px] text-slate-500 uppercase tracking-widest font-semibold mb-1">ORIGINAL</span>
+                        <span className="text-[13px] font-bold text-slate-800 text-center line-clamp-2">{item.originalName}</span>
+                      </button>
+                    <span className="mt-0.5">{renderEditablePrice('Originalprodukt', item.originalPrice, 'text-red-500')}</span>
                   </div>
 
                   <div className="flex flex-col items-center justify-center absolute left-1/2 transform -translate-x-1/2 top-4">
@@ -392,33 +601,71 @@ export const HomeView = ({ onTabChange }) => {
                   </div>
 
                   <div className="flex flex-col items-center w-2/5">
-                    <div className="w-[72px] h-[72px] bg-white squircle shadow-sm flex items-center justify-center mb-2 p-1.5 overflow-hidden">
-                      <img
-                        src={item.dupeImage || 'https://placehold.co/200x200?text=Dupe'}
-                        className="max-h-full max-w-full object-contain rounded-[14px]"
-                        alt={item.dupeName}
-                      />
-                    </div>
-                    <span className="text-[9px] text-emerald-600 uppercase tracking-widest font-bold mb-1">BESTER DUPE</span>
-                    <span className="text-[13px] font-bold text-slate-800 text-center line-clamp-2">{item.dupeName}</span>
-                    <span className="text-emerald-600 font-bold text-sm mt-0.5">{formatPrice(item.dupePrice)}</span>
+                    <button
+                      type="button"
+                      onClick={() => openProductDetail(buildDupeProduct(item, 'dupe'))}
+                      className="flex flex-col items-center text-center"
+                    >
+                      <div className="w-[72px] h-[72px] bg-white squircle shadow-sm flex items-center justify-center mb-2 p-1.5 overflow-hidden transition-transform hover:scale-[1.02]">
+                        <ProductArtwork
+                          src={item.dupeImage}
+                          alt={item.dupeName}
+                          name={item.dupeName}
+                          brand={item.dupeBrand}
+                          category={item.dupeCategory}
+                          variant="card"
+                          className="h-full w-full rounded-[14px]"
+                          imageClassName="h-full w-full object-contain rounded-[14px]"
+                        />
+                      </div>
+                      <span className="text-[9px] text-emerald-600 uppercase tracking-widest font-bold mb-1">BESTER DUPE</span>
+                      <span className="text-[13px] font-bold text-slate-800 text-center line-clamp-2">{item.dupeName}</span>
+                    </button>
+                    <span className="mt-0.5">{renderEditablePrice('Dupe', item.dupePrice, 'text-emerald-600')}</span>
                   </div>
                 </div>
 
-                <div className="bg-white squircle py-3.5 px-5 flex justify-between items-center shadow-sm">
+                <div className="bg-white squircle py-3.5 px-5 flex justify-between items-center gap-4 shadow-sm">
                   <div className="flex flex-col">
                     <span className="text-[11px] text-slate-500 font-medium mb-1">Preisvorteil:</span>
                     <span className="text-sm font-bold text-slate-900">
-                      {Math.max(0, Math.round(item.priceSavingsPercentage || 0))}% guenstiger
+                      {hasPriceComparison
+                        ? `${Math.max(0, Math.round(item.priceSavingsPercentage || 0))}% günstiger`
+                        : 'Preisvergleich fehlt'}
                     </span>
                   </div>
-                  <div className="flex flex-col items-end animate-pop-in">
-                    <span className="text-emerald-600 font-bold text-[15px] leading-tight">{Math.round(item.matchScore || 0)}%</span>
-                    <span className="text-[10px] text-emerald-700 font-semibold tracking-wide">identisch</span>
+                  <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-end animate-pop-in">
+                      <span className="text-emerald-600 font-bold text-[15px] leading-tight">{Math.round(item.matchScore || 0)}%</span>
+                      <span className="text-[10px] text-emerald-700 font-semibold tracking-wide">identisch</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        aria-label={`${item.dupeName} positiv bewerten`}
+                        onClick={() => handleDupeVote(item.id, 'up')}
+                        disabled={Boolean(votingState[item.id])}
+                        className={getVoteButtonClasses('up', item.userVotes?.[user?.uid] === 'up', Boolean(votingState[item.id]))}
+                      >
+                        <ThumbsUp size={14} className={item.userVotes?.[user?.uid] === 'up' ? 'fill-current' : ''} />
+                        <span>{item.votes?.up || 0}</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`${item.dupeName} negativ bewerten`}
+                        onClick={() => handleDupeVote(item.id, 'down')}
+                        disabled={Boolean(votingState[item.id])}
+                        className={getVoteButtonClasses('down', item.userVotes?.[user?.uid] === 'down', Boolean(votingState[item.id]))}
+                      >
+                        <ThumbsDown size={14} className={item.userVotes?.[user?.uid] === 'down' ? 'fill-current' : ''} />
+                        <span>{item.votes?.down || 0}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="squircle border border-slate-200/70 bg-white px-5 py-8 text-center text-sm text-slate-400 shadow-sm">
@@ -436,9 +683,11 @@ export const HomeView = ({ onTabChange }) => {
         {isLoadingHome ? renderRecentReviewSkeletons() : recentReviews.length > 0 ? (
           <div className="space-y-4">
             {recentReviews.map((review, index) => (
-              <div
+              <button
                 key={review.id}
-                className="squircle bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 flex gap-4 transition-all hover:border-emerald-100 group animate-pop-in"
+                type="button"
+                onClick={() => openProductDetail(buildReviewProduct(review))}
+                className="w-full squircle bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 flex gap-4 text-left transition-all hover:border-emerald-100 group animate-pop-in"
                 style={{ animationDelay: `${index * 80}ms` }}
               >
                 <div className="w-12 h-12 rounded-full p-[2px] border-[2.5px] border-emerald-50/0 group-hover:border-emerald-500/30 transition-colors flex-shrink-0 shimmer-bg shrink-0">
@@ -469,7 +718,7 @@ export const HomeView = ({ onTabChange }) => {
                     "{getReviewPreview(review.comment)}"
                   </p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         ) : (
@@ -478,6 +727,13 @@ export const HomeView = ({ onTabChange }) => {
           </div>
         )}
       </div>
+
+      <ProductDetailModal
+        isOpen={Boolean(detailProduct)}
+        product={detailProduct}
+        onClose={closeProductDetail}
+        onWriteReview={handleWriteReviewFromDetail}
+      />
 
     </div>
   );

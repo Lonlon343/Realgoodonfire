@@ -2,25 +2,31 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, Search, X } from 'lucide-react';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
-
-const formatPrice = (price) => {
-  if (typeof price !== 'number' || Number.isNaN(price)) {
-    return 'Preis folgt';
-  }
-
-  return new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(price);
-};
+import { DupeSuccessModal } from './DupeSuccessModal';
+import { ProductArtwork } from './ProductArtwork';
+import {
+  MAX_REALISTIC_PRICE_EUR,
+  MAX_REALISTIC_PRICE_INPUT,
+  PRICE_DECIMAL_MESSAGE,
+  PRICE_VALIDATION_MESSAGE,
+  formatPriceDisplay,
+  isDisplayablePrice,
+  isPriceInputFormatAllowed,
+  normalizePriceInput,
+  parsePriceValue,
+  validateRealisticPrice,
+} from '../utils/pricing';
 
 export const DupeSuggestModal = ({
   isOpen,
   onClose,
-  dupeProduct,
+  dupeProduct: dupeProductProp,
+  currentProduct,
   searchProducts = async () => [],
   onSuccess,
+  onViewFeed,
 }) => {
+  const dupeProduct = dupeProductProp || currentProduct;
   const { createDupeLink } = useShop();
   const { currentUser, requireAuth } = useAuth();
   const [query, setQuery] = useState('');
@@ -29,6 +35,9 @@ export const DupeSuggestModal = ({
   const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [missingOriginalPrice, setMissingOriginalPrice] = useState('');
+  const [missingOriginalPriceError, setMissingOriginalPriceError] = useState('');
+  const [submittedDupe, setSubmittedDupe] = useState(null);
 
   const resetState = useCallback(() => {
     setQuery('');
@@ -37,6 +46,9 @@ export const DupeSuggestModal = ({
     setIsSearching(false);
     setIsSubmitting(false);
     setError('');
+    setMissingOriginalPrice('');
+    setMissingOriginalPriceError('');
+    setSubmittedDupe(null);
   }, []);
 
   useEffect(() => {
@@ -85,9 +97,19 @@ export const DupeSuggestModal = ({
     };
   }, [dupeProduct?.id, isOpen, query, searchProducts, selectedOriginal]);
 
+  useEffect(() => {
+    setMissingOriginalPrice('');
+    setMissingOriginalPriceError('');
+  }, [selectedOriginal?.id]);
+
   if (!isOpen || !dupeProduct) {
     return null;
   }
+
+  const selectedOriginalHasPrice = isDisplayablePrice(selectedOriginal?.price);
+  const effectiveOriginalPrice = selectedOriginalHasPrice
+    ? parsePriceValue(selectedOriginal?.price)
+    : parsePriceValue(missingOriginalPrice);
 
   const handleClose = () => {
     if (isSubmitting) {
@@ -107,19 +129,81 @@ export const DupeSuggestModal = ({
       return;
     }
 
+    if (!selectedOriginalHasPrice) {
+      const originalPriceValidation = validateRealisticPrice(missingOriginalPrice, { allowEmpty: false });
+
+      if (!originalPriceValidation.isValid) {
+        setMissingOriginalPriceError(originalPriceValidation.message);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setError('');
 
     try {
-      const createdDupe = await createDupeLink(selectedOriginal, dupeProduct);
+      const originalProductForLink = {
+        ...selectedOriginal,
+        price: selectedOriginalHasPrice
+          ? parsePriceValue(selectedOriginal.price)
+          : parsePriceValue(missingOriginalPrice),
+      };
+      const createdDupe = await createDupeLink(originalProductForLink, dupeProduct);
+      setSubmittedDupe(createdDupe);
       onSuccess?.(createdDupe);
-      handleClose();
     } catch (submitError) {
       setError(submitError?.message || 'Der Dupe-Link konnte nicht gespeichert werden.');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const handleViewFeed = () => {
+    onViewFeed?.(submittedDupe);
+    onClose?.();
+  };
+
+  const handleMissingOriginalPriceChange = (event) => {
+    const nextValue = normalizePriceInput(event.target.value);
+
+    if (nextValue === '') {
+      setMissingOriginalPrice('');
+      setMissingOriginalPriceError('');
+      return;
+    }
+
+    if (nextValue.startsWith('-')) {
+      setMissingOriginalPrice(nextValue);
+      setMissingOriginalPriceError(PRICE_VALIDATION_MESSAGE);
+      return;
+    }
+
+    if (!isPriceInputFormatAllowed(nextValue)) {
+      setMissingOriginalPriceError(PRICE_DECIMAL_MESSAGE);
+      return;
+    }
+
+    setMissingOriginalPrice(nextValue);
+
+    const parsedValue = parsePriceValue(nextValue);
+
+    if (parsedValue !== null && parsedValue >= MAX_REALISTIC_PRICE_EUR) {
+      setMissingOriginalPriceError(PRICE_VALIDATION_MESSAGE);
+      return;
+    }
+
+    setMissingOriginalPriceError('');
+  };
+
+  if (submittedDupe) {
+    return (
+      <DupeSuccessModal
+        isOpen={isOpen}
+        initialMatchScore={submittedDupe.matchScore}
+        onViewFeed={handleViewFeed}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-5">
@@ -191,10 +275,15 @@ export const DupeSuggestModal = ({
                       className="flex w-full items-center gap-3 rounded-squircle border border-transparent px-3 py-3 text-left transition-colors hover:border-emerald-100 hover:bg-emerald-50/60"
                     >
                       <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-[1.2rem] bg-[#F5F2EF] p-2">
-                        <img
-                          src={product.image || 'https://placehold.co/200x200?text=Original'}
+                        <ProductArtwork
+                          src={product.image}
                           alt={product.name}
-                          className="max-h-full max-w-full object-contain"
+                          name={product.name}
+                          brand={product.brand}
+                          category={product.category}
+                          variant="card"
+                          className="h-full w-full"
+                          imageClassName="h-full w-full object-contain"
                         />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -202,7 +291,7 @@ export const DupeSuggestModal = ({
                         <div className="mt-1 flex items-center justify-between gap-3 text-xs text-slate-500">
                           <span className="truncate">{product.brand || 'Marke unbekannt'}</span>
                           <span className="whitespace-nowrap font-semibold text-emerald-700">
-                            {formatPrice(product.price)}
+                            {formatPriceDisplay(product.price)}
                           </span>
                         </div>
                       </div>
@@ -220,17 +309,22 @@ export const DupeSuggestModal = ({
               <div className="flex items-center justify-between gap-3">
                 <div className="flex w-[42%] flex-col items-center text-center">
                   <div className="mb-3 flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.5rem] bg-[#F5F2EF] p-3">
-                    <img
-                      src={dupeProduct.image || 'https://placehold.co/200x200?text=Dupe'}
+                    <ProductArtwork
+                      src={dupeProduct.image}
                       alt={dupeProduct.name}
-                      className="max-h-full max-w-full object-contain"
+                      name={dupeProduct.name}
+                      brand={dupeProduct.brand}
+                      category={dupeProduct.category}
+                      variant="card"
+                      className="h-full w-full"
+                      imageClassName="h-full w-full object-contain"
                     />
                   </div>
                   <span className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-700">
                     DUPE
                   </span>
                   <p className="line-clamp-2 text-sm font-semibold text-slate-900">{dupeProduct.name}</p>
-                  <p className="mt-1 text-xs text-slate-500">{formatPrice(dupeProduct.price)}</p>
+                  <p className="mt-1 text-xs text-slate-500">{formatPriceDisplay(dupeProduct.price)}</p>
                 </div>
 
                 <div className="flex flex-col items-center gap-2 text-emerald-500">
@@ -242,20 +336,51 @@ export const DupeSuggestModal = ({
 
                 <div className="flex w-[42%] flex-col items-center text-center">
                   <div className="mb-3 flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.5rem] bg-[#F5F2EF] p-3">
-                    <img
-                      src={selectedOriginal.image || 'https://placehold.co/200x200?text=Original'}
+                    <ProductArtwork
+                      src={selectedOriginal.image}
                       alt={selectedOriginal.name}
-                      className="max-h-full max-w-full object-contain"
+                      name={selectedOriginal.name}
+                      brand={selectedOriginal.brand}
+                      category={selectedOriginal.category}
+                      variant="card"
+                      className="h-full w-full"
+                      imageClassName="h-full w-full object-contain"
                     />
                   </div>
                   <span className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
                     ORIGINAL
                   </span>
                   <p className="line-clamp-2 text-sm font-semibold text-slate-900">{selectedOriginal.name}</p>
-                  <p className="mt-1 text-xs text-slate-500">{formatPrice(selectedOriginal.price)}</p>
+                  <p className="mt-1 text-xs text-slate-500">{formatPriceDisplay(effectiveOriginalPrice)}</p>
                 </div>
               </div>
             </div>
+
+            {!selectedOriginalHasPrice && (
+              <div className="rounded-squircle border border-amber-200 bg-amber-50 px-4 py-3.5">
+                <label className="block text-sm font-semibold text-amber-900" htmlFor="missing-original-price">
+                  Preis für das Originalprodukt fehlt. Bitte nachtragen (ca.):
+                </label>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-sm font-bold text-amber-900">€</span>
+                  <input
+                    id="missing-original-price"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={MAX_REALISTIC_PRICE_INPUT}
+                    inputMode="decimal"
+                    value={missingOriginalPrice}
+                    onChange={handleMissingOriginalPriceChange}
+                    placeholder="z.B. 3,49"
+                    className="w-full rounded-xl border border-amber-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-100"
+                  />
+                </div>
+                {missingOriginalPriceError && (
+                  <p className="mt-2 text-xs font-medium text-red-500">{missingOriginalPriceError}</p>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-3">
               <button

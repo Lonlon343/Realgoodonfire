@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Flame, ChevronRight, Loader2 } from 'lucide-react';
+import { ProductArtwork } from '../components/ProductArtwork';
 import { useShop } from '../context/useShop';
 
 const CATEGORIES = [
@@ -105,10 +106,15 @@ export const HypeView = () => {
       key={product.id}
       className="bg-white rounded-squircle shadow-[0_2px_12px_rgba(0,0,0,0.06)] flex items-center gap-4 p-3 transition-transform hover:scale-[1.01]"
     >
-      <img
-        src={product.image || 'https://placehold.co/80x80?text=N/A'}
+      <ProductArtwork
+        src={product.image}
         alt={product.name}
-        className="w-16 h-16 rounded-squircle object-cover bg-realbg flex-shrink-0"
+        name={product.name}
+        brand={product.brand}
+        category={product.category}
+        variant="card"
+        className="h-16 w-16 flex-shrink-0 rounded-squircle bg-realbg"
+        imageClassName="h-full w-full rounded-squircle object-cover bg-realbg"
       />
       <div className="flex-1 min-w-0">
         <h3 className="font-semibold text-slate-900 text-sm truncate">{product.name}</h3>

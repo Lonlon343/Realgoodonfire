@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { ProductDetailModal } from '../components/ProductDetailModal';
 import { Star } from 'lucide-react';
 import { useShop } from '../context/useShop';
 
@@ -41,12 +42,30 @@ const renderStars = (rating) => (
   </div>
 );
 
-export const FeedView = () => {
+export const FeedView = ({ onTabChange }) => {
   const { getFeedActivity } = useShop();
   const [feedItems, setFeedItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
+  const [detailProduct, setDetailProduct] = useState(null);
+
+  const openProductDetail = (review) => {
+    if (!review?.productId) {
+      return;
+    }
+
+    setDetailProduct({
+      id: review.productId,
+      name: review.productName || 'Unbekanntes Produkt',
+      brand: review.brand || '',
+      image: review.image || '',
+      category: review.category || '',
+      price: review.price ?? null,
+      store: review.store || null,
+      reviewCount: review.reviewCount || 0,
+    });
+  };
 
   useEffect(() => {
     const loadInitialFeed = async () => {
@@ -115,9 +134,11 @@ export const FeedView = () => {
           <>
             <div className="space-y-4">
               {feedItems.map((review) => (
-                <article
+                <button
                   key={review.id}
-                  className="rounded-squircle border border-slate-100/80 bg-white p-4 shadow-sm"
+                  type="button"
+                  onClick={() => openProductDetail(review)}
+                  className="w-full rounded-squircle border border-slate-100/80 bg-white p-4 text-left shadow-sm"
                 >
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
@@ -145,7 +166,7 @@ export const FeedView = () => {
                   <p className="text-sm leading-relaxed text-slate-700">
                     {review.comment?.trim() || 'Kein Kommentar hinterlassen.'}
                   </p>
-                </article>
+                </button>
               ))}
             </div>
 
@@ -164,6 +185,16 @@ export const FeedView = () => {
           </>
         )}
       </div>
+
+      <ProductDetailModal
+        isOpen={Boolean(detailProduct)}
+        product={detailProduct}
+        onClose={() => setDetailProduct(null)}
+        onWriteReview={() => {
+          setDetailProduct(null);
+          onTabChange?.('rate');
+        }}
+      />
     </div>
   );
 };

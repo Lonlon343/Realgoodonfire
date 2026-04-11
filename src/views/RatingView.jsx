@@ -1,23 +1,39 @@
 import React, { useState } from 'react';
 import { Star, ArrowLeft, Send } from 'lucide-react';
+import { ProductArtwork } from '../components/ProductArtwork';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
-
-const MAX_FOOD_PRICE_EUR = 80;
+import { DupeSuggestModal } from '../components/DupeSuggestModal';
+import {
+  MAX_REALISTIC_PRICE_EUR,
+  MAX_REALISTIC_PRICE_INPUT,
+  PRICE_DECIMAL_MESSAGE,
+  PRICE_VALIDATION_MESSAGE,
+  isPriceInputFormatAllowed,
+  normalizePriceInput,
+  parsePriceValue,
+  validateRealisticPrice,
+} from '../utils/pricing';
 
 export const RatingView = ({ onTabChange }) => {
-  const { currentProduct, addReview } = useShop();
+  const { currentProduct, addReview, searchProducts } = useShop();
   const { currentUser, requireAuth } = useAuth();
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [comment, setComment] = useState('');
   const [price, setPrice] = useState('');
   const [store, setStore] = useState('Aldi');
-  const [isDupe, setIsDupe] = useState(false);
-  const [dupeTarget, setDupeTarget] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [priceError, setPriceError] = useState('');
+  const [isDupeModalOpen, setIsDupeModalOpen] = useState(false);
+  const draftPriceValidation = validateRealisticPrice(price, { allowEmpty: true });
+  const dupeProductForModal = {
+    ...currentProduct,
+    price: draftPriceValidation.isValid && draftPriceValidation.parsed !== null
+      ? draftPriceValidation.parsed
+      : currentProduct.price,
+  };
 
   const stores = ['Aldi', 'Lidl', 'Rewe', 'Edeka', 'Penny', 'Kaufland', 'dm'];
 
@@ -43,12 +59,14 @@ export const RatingView = ({ onTabChange }) => {
       return;
     }
 
-    const parsedPrice = price ? Number.parseFloat(price) : null;
+    const priceValidation = validateRealisticPrice(price, { allowEmpty: true });
 
-    if (parsedPrice !== null && (Number.isNaN(parsedPrice) || parsedPrice < 0 || parsedPrice > MAX_FOOD_PRICE_EUR)) {
-      setPriceError(`Bitte gib einen Preis zwischen 0 und ${MAX_FOOD_PRICE_EUR} Euro ein.`);
+    if (!priceValidation.isValid) {
+      setPriceError(priceValidation.message);
       return;
     }
+
+    const parsedPrice = priceValidation.parsed;
 
     setIsSubmitting(true);
     setPriceError('');
@@ -63,8 +81,6 @@ export const RatingView = ({ onTabChange }) => {
         comment,
         price: parsedPrice,
         store,
-        isDupe,
-        dupeTarget: isDupe ? dupeTarget : null,
         date: new Date().toISOString(),
       };
 
@@ -75,8 +91,6 @@ export const RatingView = ({ onTabChange }) => {
       setRating(0);
       setComment('');
       setPrice('');
-      setDupeTarget('');
-      setIsDupe(false);
 
       setTimeout(() => {
         onTabChange('community');
@@ -90,7 +104,7 @@ export const RatingView = ({ onTabChange }) => {
   };
 
   const handlePriceChange = (event) => {
-    const nextValue = event.target.value;
+    const nextValue = normalizePriceInput(event.target.value);
 
     if (nextValue === '') {
       setPrice('');
@@ -98,26 +112,26 @@ export const RatingView = ({ onTabChange }) => {
       return;
     }
 
-    const parsedValue = Number.parseFloat(nextValue);
-
-    if (Number.isNaN(parsedValue)) {
+    if (nextValue.startsWith('-')) {
       setPrice(nextValue);
+      setPriceError(PRICE_VALIDATION_MESSAGE);
       return;
     }
 
-    if (parsedValue > MAX_FOOD_PRICE_EUR) {
-      setPrice(String(MAX_FOOD_PRICE_EUR));
-      setPriceError(`Maximal ${MAX_FOOD_PRICE_EUR} Euro sind erlaubt.`);
-      return;
-    }
-
-    if (parsedValue < 0) {
-      setPrice('0');
-      setPriceError('Der Preis darf nicht negativ sein.');
+    if (!isPriceInputFormatAllowed(nextValue)) {
+      setPriceError(PRICE_DECIMAL_MESSAGE);
       return;
     }
 
     setPrice(nextValue);
+
+    const parsedValue = parsePriceValue(nextValue);
+
+    if (parsedValue !== null && parsedValue >= MAX_REALISTIC_PRICE_EUR) {
+      setPriceError(PRICE_VALIDATION_MESSAGE);
+      return;
+    }
+
     setPriceError('');
   };
 
@@ -134,13 +148,16 @@ export const RatingView = ({ onTabChange }) => {
         </button>
 
         <div className="flex items-start gap-4">
-          {currentProduct.image && (
-            <img
-              src={currentProduct.image}
-              alt={currentProduct.name}
-              className="w-20 h-20 object-cover rounded-lg shadow-md"
-            />
-          )}
+          <ProductArtwork
+            src={currentProduct.image}
+            alt={currentProduct.name}
+            name={currentProduct.name}
+            brand={currentProduct.brand}
+            category={currentProduct.category}
+            variant="card"
+            className="h-20 w-20 flex-shrink-0 rounded-lg bg-[#F5F2EF] shadow-md"
+            imageClassName="h-full w-full rounded-lg object-cover"
+          />
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-slate-900">{currentProduct.name}</h1>
             <p className="text-slate-600">{currentProduct.brand}</p>
@@ -151,6 +168,15 @@ export const RatingView = ({ onTabChange }) => {
             )}
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => requireAuth(() => setIsDupeModalOpen(true))}
+          className="mt-5 inline-flex items-center gap-2 rounded-squircle border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-realgreen transition-all hover:border-emerald-300 hover:bg-emerald-100/80"
+        >
+          <span className="text-base leading-none">🕵️</span>
+          Dupe vorschlagen
+        </button>
       </div>
 
       {/* Form */}
@@ -202,8 +228,9 @@ export const RatingView = ({ onTabChange }) => {
             <input
               type="number"
               step="0.01"
-              min="0"
-              max={MAX_FOOD_PRICE_EUR}
+              min="0.01"
+              max={MAX_REALISTIC_PRICE_INPUT}
+              inputMode="decimal"
               value={price}
               onChange={handlePriceChange}
               placeholder="z.B. 2,99"
@@ -245,28 +272,6 @@ export const RatingView = ({ onTabChange }) => {
           <p className="text-xs text-slate-500 mt-2">{comment.length}/500</p>
         </div>
 
-        {/* Dupe Checkbox */}
-        <div className="bg-purple-50 rounded-xl p-6 border border-purple-200">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isDupe}
-              onChange={(e) => setIsDupe(e.target.checked)}
-              className="w-5 h-5 rounded border-2 border-purple-300 cursor-pointer"
-            />
-            <span className="font-bold text-purple-900">👥 Dupe-Alert: Ähnliches Produkt?</span>
-          </label>
-          {isDupe && (
-            <input
-              type="text"
-              value={dupeTarget}
-              onChange={(e) => setDupeTarget(e.target.value)}
-              placeholder="Z.B. Nutella 750g"
-              className="w-full mt-3 px-4 py-2 border-2 border-purple-300 rounded-lg focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
-            />
-          )}
-        </div>
-
         {/* Submit Button */}
         <button
           type="button"
@@ -278,6 +283,19 @@ export const RatingView = ({ onTabChange }) => {
           {isSubmitting ? 'Speichere...' : 'Bewertung posten'}
         </button>
       </form>
+
+      {isDupeModalOpen && (
+        <DupeSuggestModal
+          isOpen={isDupeModalOpen}
+          currentProduct={dupeProductForModal}
+          searchProducts={searchProducts}
+          onClose={() => setIsDupeModalOpen(false)}
+          onViewFeed={() => {
+            setIsDupeModalOpen(false);
+            onTabChange('community');
+          }}
+        />
+      )}
     </div>
   );
 };

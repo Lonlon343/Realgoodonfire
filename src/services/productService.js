@@ -70,7 +70,7 @@ export async function getTopDupes() {
   const dupesQuery = query(
     collection(db, 'dupes'),
     orderBy('matchScore', 'desc'),
-    limit(3)
+    limit(5)
   );
 
   const snapshot = await getDocs(dupesQuery);

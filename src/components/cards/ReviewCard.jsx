@@ -1,5 +1,6 @@
 import React from 'react';
 import { Star, Flame } from 'lucide-react';
+import { ProductArtwork } from '../ProductArtwork';
 
 export const ReviewCard = ({ review, product }) => {
   if (!product) {
@@ -41,10 +42,15 @@ export const ReviewCard = ({ review, product }) => {
     <div className="bg-white rounded-2xl shadow-md overflow-hidden mb-4 p-4">
       {/* Header: Product Info */}
       <div className="flex gap-3 mb-3">
-        <img
+        <ProductArtwork
           src={product.image}
           alt={product.name}
-          className="w-14 h-14 rounded-lg object-cover bg-slate-100"
+          name={product.name}
+          brand={product.brand}
+          category={product.category}
+          variant="card"
+          className="h-14 w-14 rounded-lg bg-slate-100"
+          imageClassName="h-full w-full rounded-lg object-cover bg-slate-100"
         />
         <div className="flex-1">
           <p className="text-sm text-slate-500">{product.brand}</p>

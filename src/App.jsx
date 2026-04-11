@@ -23,7 +23,7 @@ function App() {
       case 'scanner':
         return <ScannerView onTabChange={setActiveTab} />;
       case 'community':
-        return <CommunityView />;
+        return <CommunityView onTabChange={setActiveTab} />;
       case 'profile':
         return <ProfileView />;
       case 'rate':

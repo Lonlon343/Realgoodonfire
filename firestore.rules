@@ -1,0 +1,155 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVoteChoice(value) {
+      return value == 'up' || value == 'down';
+    }
+
+    function clampScore(score) {
+      return score < 0 ? 0 : score > 100 ? 100 : score;
+    }
+
+    function expectedDupeMatchScore(priceSavingsPercentage, votes) {
+      return clampScore(50 + (priceSavingsPercentage / 2) + ((votes.up - votes.down) * 4));
+    }
+
+    function matchScoreIsValid(priceSavingsPercentage, votes, matchScore) {
+      return matchScore is number
+        && matchScore >= 0
+        && matchScore <= 100
+        && math.abs(matchScore - expectedDupeMatchScore(priceSavingsPercentage, votes)) <= 0.1;
+    }
+
+    function isValidOptionalPrice(value) {
+      return value == null || (
+        value is number
+        && value > 0
+        && value < 100
+      );
+    }
+
+    function isValidDupeCreate() {
+      return isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.originalId is string
+        && request.resource.data.dupeId is string
+        && request.resource.data.priceSavingsPercentage is number
+        && request.resource.data.votes is map
+        && request.resource.data.votes.keys().hasOnly(['up', 'down'])
+        && request.resource.data.votes.up == 1
+        && request.resource.data.votes.down == 0
+        && request.resource.data.userVotes is map
+        && request.resource.data.userVotes.keys().hasOnly([request.auth.uid])
+        && request.resource.data.userVotes[request.auth.uid] == 'up'
+        && isValidOptionalPrice(request.resource.data.originalPrice)
+        && isValidOptionalPrice(request.resource.data.dupePrice)
+        && matchScoreIsValid(
+          request.resource.data.priceSavingsPercentage,
+          request.resource.data.votes,
+          request.resource.data.matchScore
+        );
+    }
+
+    function hasOnlyVoteFieldsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'userVotes', 'matchScore']);
+    }
+
+    function userVoteMapIsValid() {
+      return resource.data.userVotes is map
+        && request.resource.data.userVotes is map
+        && request.resource.data.userVotes.diff(resource.data.userVotes).affectedKeys().hasOnly([request.auth.uid])
+        && isVoteChoice(request.resource.data.userVotes[request.auth.uid]);
+    }
+
+    function voteCountersAreValid() {
+      return (
+        resource.data.userVotes[request.auth.uid] == null
+        && request.resource.data.userVotes[request.auth.uid] == 'up'
+        && request.resource.data.votes.up == resource.data.votes.up + 1
+        && request.resource.data.votes.down == resource.data.votes.down
+      ) || (
+        resource.data.userVotes[request.auth.uid] == null
+        && request.resource.data.userVotes[request.auth.uid] == 'down'
+        && request.resource.data.votes.up == resource.data.votes.up
+        && request.resource.data.votes.down == resource.data.votes.down + 1
+      ) || (
+        resource.data.userVotes[request.auth.uid] == 'up'
+        && request.resource.data.userVotes[request.auth.uid] == 'down'
+        && request.resource.data.votes.up == resource.data.votes.up - 1
+        && request.resource.data.votes.down == resource.data.votes.down + 1
+      ) || (
+        resource.data.userVotes[request.auth.uid] == 'down'
+        && request.resource.data.userVotes[request.auth.uid] == 'up'
+        && request.resource.data.votes.up == resource.data.votes.up + 1
+        && request.resource.data.votes.down == resource.data.votes.down - 1
+      );
+    }
+
+    function isValidDupeVoteUpdate() {
+      return isSignedIn()
+        && resource.data.votes is map
+        && request.resource.data.votes is map
+        && request.resource.data.votes.keys().hasOnly(['up', 'down'])
+        && hasOnlyVoteFieldsChanged()
+        && userVoteMapIsValid()
+        && voteCountersAreValid()
+        && matchScoreIsValid(
+          resource.data.priceSavingsPercentage,
+          request.resource.data.votes,
+          request.resource.data.matchScore
+        );
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly([
+        'name',
+        'brand',
+        'image',
+        'nutriScore',
+        'category',
+        'price',
+        'createdAt',
+        'reviewCount'
+      ])
+      && isValidOptionalPrice(request.resource.data.price);
+      allow delete: if false;
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'productId',
+          'productName',
+          'brand',
+          'image',
+          'rating',
+          'comment',
+          'price',
+          'store',
+          'isDupe',
+          'dupeTarget',
+          'createdAt',
+          'userId',
+          'userName',
+          'userAvatar'
+        ])
+        && isValidOptionalPrice(request.resource.data.price);
+      allow update, delete: if false;
+    }
+
+    match /dupes/{dupeId} {
+      allow read: if true;
+      allow create: if isValidDupeCreate();
+      allow update: if isValidDupeVoteUpdate();
+      allow delete: if false;
+    }
+  }
+}
