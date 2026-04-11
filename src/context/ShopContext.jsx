@@ -2,17 +2,47 @@
 import React, { createContext, useCallback, useEffect, useState } from 'react';
 import { MOCK_PRODUCTS, STORES } from '../data';
 import { db } from '../firebase';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  increment,
+  limit,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  startAfter,
+} from 'firebase/firestore';
 import {
   getHypeProducts,
   getNewestProducts as fetchNewestProducts,
   getTopDupes as fetchTopDupes,
   mapCategory,
 } from '../services/productService';
+import { useAuth } from './useAuth';
 
 const ShopContext = createContext();
 
+const parsePriceValue = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsedValue = Number.parseFloat(value.replace(',', '.'));
+    return Number.isFinite(parsedValue) ? parsedValue : null;
+  }
+
+  return null;
+};
+
+const clampPercentage = (value) => Math.min(100, Math.max(0, value));
+
 export const ShopProvider = ({ children }) => {
+  const { currentUser } = useAuth();
   const [products] = useState(MOCK_PRODUCTS);
   const [currentProduct, setCurrentProduct] = useState(null);
   const [newestProducts, setNewestProducts] = useState([]);
@@ -48,6 +78,28 @@ export const ShopProvider = ({ children }) => {
     const dupesData = await fetchTopDupes();
     setTopDupes(dupesData);
     return dupesData;
+  }, []);
+
+  const getFeedActivity = useCallback(async (lastVisibleDoc = null) => {
+    const feedConstraints = [
+      orderBy('createdAt', 'desc'),
+      limit(15),
+    ];
+
+    if (lastVisibleDoc) {
+      feedConstraints.push(startAfter(lastVisibleDoc));
+    }
+
+    const feedQuery = query(collection(db, 'reviews'), ...feedConstraints);
+    const snapshot = await getDocs(feedQuery);
+
+    return {
+      reviews: snapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data(),
+      })),
+      lastVisibleDoc: snapshot.docs[snapshot.docs.length - 1] || null,
+    };
   }, []);
 
   const loadHomeData = useCallback(async () => {
@@ -155,35 +207,125 @@ export const ShopProvider = ({ children }) => {
     }
   };
 
-  const addReview = (review, authUser = null) => {
-    const newReview = {
-      ...review,
-      id: Date.now().toString(),
-      date: new Date().toISOString(),
+  const addReview = useCallback(async (review, authUser = null) => {
+    const reviewPayload = {
+      productId: review.productId,
+      productName: review.productName || 'Unbekanntes Produkt',
+      brand: review.brand || '',
+      image: review.image || '',
+      rating: review.rating || 0,
+      comment: review.comment || '',
+      price: parsePriceValue(review.price),
+      store: review.store || null,
+      isDupe: Boolean(review.isDupe),
+      dupeTarget: review.isDupe ? review.dupeTarget || null : null,
+      createdAt: serverTimestamp(),
       ...(authUser && {
         userId: authUser.uid,
-        userName: authUser.displayName,
-        userAvatar: authUser.photoURL,
+        userName: authUser.displayName || 'Foodie',
+        userAvatar: authUser.photoURL || null,
       }),
     };
+
+    const reviewRef = await addDoc(collection(db, 'reviews'), reviewPayload);
+
+    if (review.productId) {
+      await setDoc(
+        doc(db, 'products', review.productId),
+        { reviewCount: increment(1) },
+        { merge: true }
+      );
+    }
+
+    const newReview = {
+      ...reviewPayload,
+      id: reviewRef.id,
+      createdAt: new Date(),
+      date: new Date().toISOString(),
+    };
+
     setReviews((prevReviews) => [newReview, ...prevReviews]);
-  };
+    return newReview;
+  }, []);
 
   const getProduct = (barcode) => {
     return products.find((p) => p.id === barcode);
   };
+
+  const createDupeLink = useCallback(async (originalProduct, dupeProduct) => {
+    if (!currentUser?.uid) {
+      throw new Error('Du musst eingeloggt sein, um einen Dupe einzutragen.');
+    }
+
+    if (!originalProduct?.id || !dupeProduct?.id) {
+      throw new Error('Originalprodukt und Dupe-Produkt werden benötigt.');
+    }
+
+    if (originalProduct.id === dupeProduct.id) {
+      throw new Error('Ein Produkt kann nicht mit sich selbst verknüpft werden.');
+    }
+
+    const originalPrice = parsePriceValue(originalProduct.price);
+    const dupePrice = parsePriceValue(dupeProduct.price);
+    const hasValidPriceComparison = originalPrice !== null && originalPrice > 0 && dupePrice !== null;
+    const rawSavingsPercentage = hasValidPriceComparison
+      ? ((originalPrice - dupePrice) / originalPrice) * 100
+      : 0;
+    const priceSavingsPercentage = Number.isFinite(rawSavingsPercentage)
+      ? Math.round(rawSavingsPercentage * 10) / 10
+      : 0;
+    const initialMatchScore = clampPercentage(
+      Math.round((50 + (priceSavingsPercentage / 2)) * 10) / 10
+    );
+
+    const dupePayload = {
+      originalId: originalProduct.id,
+      originalName: originalProduct.name || 'Unbekanntes Original',
+      originalBrand: originalProduct.brand || '',
+      originalImage: originalProduct.image || 'https://placehold.co/300x300?text=Original',
+      originalPrice,
+      dupeId: dupeProduct.id,
+      dupeName: dupeProduct.name || 'Unbekanntes Produkt',
+      dupeBrand: dupeProduct.brand || '',
+      dupeImage: dupeProduct.image || 'https://placehold.co/300x300?text=Dupe',
+      dupePrice,
+      createdBy: currentUser.uid,
+      matchScore: initialMatchScore,
+      priceSavingsPercentage,
+      votes: { up: 1, down: 0 },
+      createdAt: serverTimestamp(),
+    };
+
+    const dupeRef = await addDoc(collection(db, 'dupes'), dupePayload);
+    const createdDupe = {
+      id: dupeRef.id,
+      ...dupePayload,
+      createdAt: new Date(),
+    };
+
+    setTopDupes((prevDupes) => {
+      const nextDupes = [createdDupe, ...prevDupes];
+      return nextDupes
+        .sort((firstDupe, secondDupe) => (secondDupe.matchScore || 0) - (firstDupe.matchScore || 0))
+        .slice(0, 3);
+    });
+
+    return createdDupe;
+  }, [currentUser]);
 
   const value = {
     products,
     reviews,
     stores: STORES,
     addReview,
+    getFeedActivity,
     getProduct,
     getNewestProducts,
     getTopDupes,
     getTrendingProducts,
     fetchProductByBarcode,
     loadHomeData,
+    createDupeLink,
     currentProduct, 
     newestProducts,
     topDupes,

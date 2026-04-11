@@ -58,7 +58,7 @@ export const RatingView = ({ onTabChange }) => {
       };
 
       console.log('💾 Speichere Review:', review);
-      addReview(review, currentUser);
+      await addReview(review, currentUser);
 
       setSuccess(true);
       setRating(0);
