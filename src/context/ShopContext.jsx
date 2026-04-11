@@ -41,12 +41,29 @@ const parsePriceValue = (value) => {
 
 const clampPercentage = (value) => Math.min(100, Math.max(0, value));
 
+const mapRecentReview = (docSnapshot) => {
+  const data = docSnapshot.data();
+
+  return {
+    id: docSnapshot.id,
+    userId: data.userId || null,
+    userName: data.userName || 'Foodie',
+    userAvatar: data.userAvatar || null,
+    productId: data.productId || null,
+    productName: data.productName || 'Unbekanntes Produkt',
+    rating: typeof data.rating === 'number' ? data.rating : 0,
+    comment: data.comment || '',
+    createdAt: data.createdAt || null,
+  };
+};
+
 export const ShopProvider = ({ children }) => {
   const { currentUser } = useAuth();
   const [products] = useState(MOCK_PRODUCTS);
   const [currentProduct, setCurrentProduct] = useState(null);
   const [newestProducts, setNewestProducts] = useState([]);
   const [topDupes, setTopDupes] = useState([]);
+  const [recentReviews, setRecentReviews] = useState([]);
   const [isLoadingHome, setIsLoadingHome] = useState(false);
 
   const [reviews, setReviews] = useState(() => {
@@ -102,31 +119,69 @@ export const ShopProvider = ({ children }) => {
     };
   }, []);
 
+  const getRecentReviews = useCallback(async () => {
+    const recentReviewsQuery = query(
+      collection(db, 'reviews'),
+      orderBy('createdAt', 'desc'),
+      limit(3)
+    );
+
+    const snapshot = await getDocs(recentReviewsQuery);
+    const reviewData = snapshot.docs.map(mapRecentReview);
+
+    setRecentReviews(reviewData);
+    return reviewData;
+  }, []);
+
   const loadHomeData = useCallback(async () => {
     setIsLoadingHome(true);
 
     try {
-      const [productsData, dupesData] = await Promise.all([
+      const [productsResult, dupesResult, reviewsResult] = await Promise.allSettled([
         fetchNewestProducts(),
         fetchTopDupes(),
+        getRecentReviews(),
       ]);
+
+      const productsData = productsResult.status === 'fulfilled' ? productsResult.value : [];
+      const dupesData = dupesResult.status === 'fulfilled' ? dupesResult.value : [];
+      const reviewsData = reviewsResult.status === 'fulfilled' ? reviewsResult.value : [];
+
+      if (productsResult.status === 'rejected') {
+        console.error('Fehler beim Laden neuer Produkte:', productsResult.reason);
+      }
+
+      if (dupesResult.status === 'rejected') {
+        console.error('Fehler beim Laden der Dupes:', dupesResult.reason);
+      }
+
+      if (reviewsResult.status === 'rejected') {
+        console.error('Fehler beim Laden der letzten Reviews:', reviewsResult.reason);
+      }
 
       setNewestProducts(productsData);
       setTopDupes(dupesData);
+      setRecentReviews(reviewsData);
 
       return {
         newestProducts: productsData,
         topDupes: dupesData,
+        recentReviews: reviewsData,
       };
     } catch (error) {
       console.error('Fehler beim Laden der Home-Daten:', error);
       setNewestProducts([]);
       setTopDupes([]);
-      throw error;
+      setRecentReviews([]);
+      return {
+        newestProducts: [],
+        topDupes: [],
+        recentReviews: [],
+      };
     } finally {
       setIsLoadingHome(false);
     }
-  }, []);
+  }, [getRecentReviews]);
 
   // Action: Fetch data from OpenFoodFacts
   const fetchProductByBarcode = async (barcode) => {
@@ -245,6 +300,7 @@ export const ShopProvider = ({ children }) => {
     };
 
     setReviews((prevReviews) => [newReview, ...prevReviews]);
+    setRecentReviews((prevReviews) => [newReview, ...prevReviews].slice(0, 3));
     return newReview;
   }, []);
 
@@ -321,6 +377,7 @@ export const ShopProvider = ({ children }) => {
     getFeedActivity,
     getProduct,
     getNewestProducts,
+    getRecentReviews,
     getTopDupes,
     getTrendingProducts,
     fetchProductByBarcode,
@@ -329,6 +386,7 @@ export const ShopProvider = ({ children }) => {
     currentProduct, 
     newestProducts,
     topDupes,
+    recentReviews,
     isLoadingHome,
     setCurrentProduct,
     getHypeProducts,

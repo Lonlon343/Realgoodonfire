@@ -9,6 +9,7 @@ export const HomeView = ({ onTabChange }) => {
     loadHomeData,
     newestProducts,
     topDupes,
+    recentReviews,
     isLoadingHome,
     setCurrentProduct,
   } = useShop();
@@ -87,6 +88,26 @@ export const HomeView = ({ onTabChange }) => {
     return `vor ${diffDays} Tag${diffDays === 1 ? '' : 'en'}`;
   };
 
+  const getReviewPreview = (comment) => {
+    const trimmedComment = comment?.trim() || '';
+
+    if (!trimmedComment) {
+      return 'Noch ohne Kommentar.';
+    }
+
+    return trimmedComment.length > 60
+      ? `${trimmedComment.slice(0, 60).trim()}...`
+      : trimmedComment;
+  };
+
+  const getReviewAvatar = (review) => {
+    if (review.userAvatar) {
+      return review.userAvatar;
+    }
+
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(review.userName || 'Foodie')}&background=f8f9fa&color=333`;
+  };
+
   const renderNewestSkeletons = () => (
     <div className="grid grid-cols-2 gap-4">
       {Array.from({ length: 4 }).map((_, index) => (
@@ -135,6 +156,31 @@ export const HomeView = ({ onTabChange }) => {
             <div className="space-y-2 text-right">
               <div className="h-4 w-12 rounded-full bg-slate-100" />
               <div className="h-3 w-16 rounded-full bg-slate-100" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderRecentReviewSkeletons = () => (
+    <div className="space-y-4">
+      {Array.from({ length: 2 }).map((_, index) => (
+        <div
+          key={`recent-review-skeleton-${index}`}
+          className="squircle border border-slate-100 bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] animate-pulse"
+        >
+          <div className="flex gap-4">
+            <div className="h-12 w-12 rounded-full bg-slate-100 shrink-0" />
+            <div className="flex-1 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="h-4 w-28 rounded-full bg-slate-100" />
+                <div className="h-3 w-14 rounded-full bg-slate-100" />
+              </div>
+              <div className="h-3 w-32 rounded-full bg-slate-100" />
+              <div className="h-4 w-20 rounded-full bg-slate-100" />
+              <div className="h-4 w-full rounded-full bg-slate-100" />
+              <div className="h-4 w-4/5 rounded-full bg-slate-100" />
             </div>
           </div>
         </div>
@@ -361,8 +407,10 @@ export const HomeView = ({ onTabChange }) => {
 
                 <div className="bg-white squircle py-3.5 px-5 flex justify-between items-center shadow-sm">
                   <div className="flex flex-col">
-                    <span className="text-[11px] text-slate-500 font-medium mb-1">Community-Rating:</span>
-                    {renderPremiumStars(item.rating)}
+                    <span className="text-[11px] text-slate-500 font-medium mb-1">Preisvorteil:</span>
+                    <span className="text-sm font-bold text-slate-900">
+                      {Math.max(0, Math.round(item.priceSavingsPercentage || 0))}% guenstiger
+                    </span>
                   </div>
                   <div className="flex flex-col items-end animate-pop-in">
                     <span className="text-emerald-600 font-bold text-[15px] leading-tight">{Math.round(item.matchScore || 0)}%</span>
@@ -374,7 +422,7 @@ export const HomeView = ({ onTabChange }) => {
           </div>
         ) : (
           <div className="squircle border border-slate-200/70 bg-white px-5 py-8 text-center text-sm text-slate-400 shadow-sm">
-            Noch keine Dupe-Vorschlaege vorhanden.
+            Noch keine Dupes gefunden - scanne ein Produkt!
           </div>
         )}
       </div>
@@ -385,37 +433,50 @@ export const HomeView = ({ onTabChange }) => {
           Gerade gesnackt 💬
         </h3>
 
-        <div className="space-y-4">
-          <div className="squircle bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 flex gap-4 transition-all hover:border-emerald-100 group">
-            <div className="w-12 h-12 rounded-full p-[2px] border-[2.5px] border-emerald-50/0 group-hover:border-emerald-500/30 transition-colors flex-shrink-0 shimmer-bg shrink-0">
-              <img src="https://ui-avatars.com/api/?name=Leon+R&background=f8f9fa&color=333" alt="Leon R." className="w-full h-full rounded-full" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="font-bold text-slate-900 text-sm tracking-tight">Leon R.</span>
-                {renderPremiumStars(5)}
+        {isLoadingHome ? renderRecentReviewSkeletons() : recentReviews.length > 0 ? (
+          <div className="space-y-4">
+            {recentReviews.map((review, index) => (
+              <div
+                key={review.id}
+                className="squircle bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 flex gap-4 transition-all hover:border-emerald-100 group animate-pop-in"
+                style={{ animationDelay: `${index * 80}ms` }}
+              >
+                <div className="w-12 h-12 rounded-full p-[2px] border-[2.5px] border-emerald-50/0 group-hover:border-emerald-500/30 transition-colors flex-shrink-0 shimmer-bg shrink-0">
+                  <img
+                    src={getReviewAvatar(review)}
+                    alt={review.userName || 'Foodie'}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1.5 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="truncate font-bold text-slate-900 text-sm tracking-tight">
+                          {review.userName || 'Foodie'}
+                        </span>
+                        {renderPremiumStars(review.rating)}
+                      </div>
+                      <p className="truncate text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                        {review.productName || 'Unbekanntes Produkt'}
+                      </p>
+                    </div>
+                    <span className="whitespace-nowrap text-[11px] font-medium text-slate-400">
+                      {formatTimeAgo(review.createdAt)}
+                    </span>
+                  </div>
+                  <p className="text-slate-600 text-[13px] italic leading-relaxed">
+                    "{getReviewPreview(review.comment)}"
+                  </p>
+                </div>
               </div>
-              <p className="text-slate-600 text-[13px] italic leading-relaxed">
-                "Die neuen Pistazien-Kekse von Edeka sind der absolute Wahnsinn! 🍪✨"
-              </p>
-            </div>
+            ))}
           </div>
-
-          <div className="squircle bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-slate-100 flex gap-4 transition-all hover:border-emerald-100 group">
-            <div className="w-12 h-12 rounded-full p-[2px] border-[2.5px] border-emerald-50/0 group-hover:border-emerald-500/30 transition-colors flex-shrink-0 shimmer-bg shrink-0">
-              <img src="https://ui-avatars.com/api/?name=Sarah+M&background=f8f9fa&color=333" alt="Sarah M." className="w-full h-full rounded-full" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="font-bold text-slate-900 text-sm tracking-tight">Sarah M.</span>
-                {renderPremiumStars(5)}
-              </div>
-              <p className="text-slate-600 text-[13px] italic leading-relaxed">
-                "Überraschend guter Dupe zum Original, aber etwas süßer."
-              </p>
-            </div>
+        ) : (
+          <div className="squircle border border-slate-200/70 bg-white px-5 py-8 text-center text-sm text-slate-400 shadow-sm">
+            Noch ist es ruhig hier. Schnapp dir den Scanner und mach den Anfang! 🍔
           </div>
-        </div>
+        )}
       </div>
 
     </div>
