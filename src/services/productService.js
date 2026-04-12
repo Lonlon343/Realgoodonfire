@@ -2,6 +2,7 @@
 import { db } from '../firebase';
 import {
   collection,
+  documentId,
   getDocs,
   limit,
   orderBy,
@@ -9,6 +10,81 @@ import {
   startAfter,
   where,
 } from 'firebase/firestore';
+import { getStoreQueryValues, normalizeStoreName } from '../data';
+
+const HYPE_PAGE_SIZE = 10;
+const PRODUCT_ID_BATCH_SIZE = 30;
+
+const chunkArray = (items, chunkSize) => {
+  const chunks = [];
+
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+};
+
+const sortProductsByHype = (firstProduct, secondProduct) => {
+  const hypeDifference = (secondProduct.reviewCount || 0) - (firstProduct.reviewCount || 0);
+
+  if (hypeDifference !== 0) {
+    return hypeDifference;
+  }
+
+  return (firstProduct.name || '').localeCompare(secondProduct.name || '', 'de');
+};
+
+const getProductsByIds = async (productIds) => {
+  const uniqueProductIds = [...new Set(productIds.filter(Boolean))];
+
+  if (uniqueProductIds.length === 0) {
+    return [];
+  }
+
+  const productIdBatches = chunkArray(uniqueProductIds, PRODUCT_ID_BATCH_SIZE);
+  const snapshots = await Promise.all(productIdBatches.map((productIdBatch) => getDocs(query(
+    collection(db, 'products'),
+    where(documentId(), 'in', productIdBatch)
+  ))));
+
+  return snapshots.flatMap((snapshot) => snapshot.docs.map((docSnapshot) => ({
+    id: docSnapshot.id,
+    ...docSnapshot.data(),
+  })));
+};
+
+const getStoreFilteredHypeProducts = async (categoryFilter, lastVisibleDoc, storeFilter) => {
+  const storeQueryValues = getStoreQueryValues(storeFilter);
+
+  if (storeQueryValues.length === 0) {
+    return {
+      docs: [],
+      lastDoc: null,
+    };
+  }
+
+  const reviewsSnapshot = await getDocs(query(
+    collection(db, 'reviews'),
+    where('store', 'in', storeQueryValues)
+  ));
+
+  const matchingProductIds = reviewsSnapshot.docs
+    .map((docSnapshot) => docSnapshot.data()?.productId)
+    .filter(Boolean);
+  const matchingProducts = await getProductsByIds(matchingProductIds);
+  const filteredProducts = matchingProducts
+    .filter((product) => !categoryFilter || product.category === categoryFilter)
+    .sort(sortProductsByHype);
+  const offset = typeof lastVisibleDoc === 'number' ? lastVisibleDoc : 0;
+  const docs = filteredProducts.slice(offset, offset + HYPE_PAGE_SIZE);
+  const nextOffset = offset + docs.length;
+
+  return {
+    docs,
+    lastDoc: nextOffset < filteredProducts.length ? nextOffset : null,
+  };
+};
 
 // ── Helper: Map OFF tags to one of 5 categories ──
 export function mapCategory(offTags = []) {
@@ -29,7 +105,13 @@ export function mapCategory(offTags = []) {
 }
 
 // ── Pagination query for hype products ──
-export async function getHypeProducts(categoryFilter = null, lastVisibleDoc = null) {
+export async function getHypeProducts(categoryFilter = null, lastVisibleDoc = null, storeFilter = 'Alle') {
+  const normalizedStoreFilter = normalizeStoreName(storeFilter);
+
+  if (normalizedStoreFilter && normalizedStoreFilter !== 'Alle') {
+    return getStoreFilteredHypeProducts(categoryFilter, lastVisibleDoc, normalizedStoreFilter);
+  }
+
   const productsRef = collection(db, 'products');
   const constraints = [];
 
@@ -37,7 +119,7 @@ export async function getHypeProducts(categoryFilter = null, lastVisibleDoc = nu
     constraints.push(where('category', '==', categoryFilter));
   }
   constraints.push(orderBy('reviewCount', 'desc'));
-  constraints.push(limit(10));
+  constraints.push(limit(HYPE_PAGE_SIZE));
 
   if (lastVisibleDoc) {
     constraints.push(startAfter(lastVisibleDoc));

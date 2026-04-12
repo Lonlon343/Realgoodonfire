@@ -16,7 +16,7 @@ import {
 } from '../utils/pricing';
 
 export const RatingView = ({ onTabChange }) => {
-  const { currentProduct, addReview, searchProducts } = useShop();
+  const { currentProduct, addReview, searchProducts, stores } = useShop();
   const { currentUser, requireAuth } = useAuth();
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
@@ -34,8 +34,6 @@ export const RatingView = ({ onTabChange }) => {
       ? draftPriceValidation.parsed
       : currentProduct.price,
   };
-
-  const stores = ['Aldi', 'Lidl', 'Rewe', 'Edeka', 'Penny', 'Kaufland', 'dm'];
 
   if (!currentProduct) {
     return (

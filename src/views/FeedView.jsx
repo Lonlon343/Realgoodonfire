@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ProductDetailModal } from '../components/ProductDetailModal';
+import { StoreFilterChips } from '../components/StoreFilterChips';
 import { Star } from 'lucide-react';
 import { useShop } from '../context/useShop';
+import { STORE_FILTERS, normalizeStoreName, storeMatchesFilter } from '../data';
 
 const formatTimeAgo = (timestamp) => {
   const date = timestamp?.toDate?.() || (timestamp instanceof Date ? timestamp : null);
@@ -49,6 +51,11 @@ export const FeedView = ({ onTabChange }) => {
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [detailProduct, setDetailProduct] = useState(null);
+  const [activeStore, setActiveStore] = useState('Alle');
+
+  const filteredFeedItems = useMemo(() => feedItems.filter((review) => (
+    storeMatchesFilter(review.store, activeStore)
+  )), [activeStore, feedItems]);
 
   const openProductDetail = (review) => {
     if (!review?.productId) {
@@ -116,6 +123,13 @@ export const FeedView = ({ onTabChange }) => {
           <h1 className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
             Community Feed 💬
           </h1>
+
+          <StoreFilterChips
+            stores={STORE_FILTERS}
+            activeStore={activeStore}
+            onChange={setActiveStore}
+            className="mt-4"
+          />
         </div>
       </div>
 
@@ -130,10 +144,19 @@ export const FeedView = ({ onTabChange }) => {
               Noch ist es ruhig hier. Schnapp dir den Scanner und mach den Anfang! 🍔
             </p>
           </div>
+        ) : filteredFeedItems.length === 0 ? (
+          <div className="rounded-squircle border border-slate-200/70 bg-white px-6 py-10 text-center shadow-sm">
+            <p className="text-sm font-medium text-slate-500">
+              Im Feed gibt es aktuell keine Reviews von {activeStore}.
+            </p>
+            <p className="mt-2 text-xs text-slate-400">
+              Wechsle den Filter oder lade weitere Eintraege nach.
+            </p>
+          </div>
         ) : (
           <>
             <div className="space-y-4">
-              {feedItems.map((review) => (
+              {filteredFeedItems.map((review) => (
                 <button
                   key={review.id}
                   type="button"
@@ -151,9 +174,16 @@ export const FeedView = ({ onTabChange }) => {
                         <p className="truncate text-sm font-bold text-slate-900">
                           {review.userName || 'Foodie'}
                         </p>
-                        <p className="text-xs text-slate-500">
-                          hat <span className="font-semibold text-slate-700">{review.productName || 'ein Produkt'}</span> bewertet
-                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <p className="text-xs text-slate-500">
+                            hat <span className="font-semibold text-slate-700">{review.productName || 'ein Produkt'}</span> bewertet
+                          </p>
+                          {review.store ? (
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                              {normalizeStoreName(review.store)}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                     <span className="flex-shrink-0 text-xs font-medium text-slate-400">

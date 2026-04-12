@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Flame, ChevronRight, Loader2 } from 'lucide-react';
 import { ProductArtwork } from '../components/ProductArtwork';
+import { StoreFilterChips } from '../components/StoreFilterChips';
 import { useShop } from '../context/useShop';
+import { STORE_FILTERS } from '../data';
 
 const CATEGORIES = [
   { name: 'Snacks', emoji: '🍿', accent: 'from-amber-400 to-orange-500' },
@@ -15,19 +17,20 @@ export const HypeView = () => {
   const { getHypeProducts } = useShop();
 
   const [activeCategory, setActiveCategory] = useState(null);
+  const [activeStore, setActiveStore] = useState('Alle');
   const [hypeProducts, setHypeProducts] = useState([]);
   const [lastVisibleDoc, setLastVisibleDoc] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
   // Fetch first page whenever category changes
-  const fetchInitial = useCallback(async (cat) => {
+  const fetchInitial = useCallback(async (cat, store) => {
     setIsLoading(true);
     setHypeProducts([]);
     setLastVisibleDoc(null);
     setHasMore(true);
     try {
-      const { docs, lastDoc } = await getHypeProducts(cat, null);
+      const { docs, lastDoc } = await getHypeProducts(cat, null, store);
       setHypeProducts(docs);
       setLastVisibleDoc(lastDoc);
       if (docs.length < 10) setHasMore(false);
@@ -39,15 +42,15 @@ export const HypeView = () => {
   }, [getHypeProducts]);
 
   useEffect(() => {
-    fetchInitial(activeCategory);
-  }, [activeCategory, fetchInitial]);
+    fetchInitial(activeCategory, activeStore);
+  }, [activeCategory, activeStore, fetchInitial]);
 
   // Load next 10
   const loadMore = async () => {
     if (!lastVisibleDoc || isLoading) return;
     setIsLoading(true);
     try {
-      const { docs, lastDoc } = await getHypeProducts(activeCategory, lastVisibleDoc);
+      const { docs, lastDoc } = await getHypeProducts(activeCategory, lastVisibleDoc, activeStore);
       setHypeProducts((prev) => [...prev, ...docs]);
       setLastVisibleDoc(lastDoc);
       if (docs.length < 10) setHasMore(false);
@@ -119,6 +122,11 @@ export const HypeView = () => {
       <div className="flex-1 min-w-0">
         <h3 className="font-semibold text-slate-900 text-sm truncate">{product.name}</h3>
         <p className="text-xs text-slate-400 truncate">{product.brand}</p>
+        {activeStore !== 'Alle' ? (
+          <span className="mt-2 inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
+            {activeStore}
+          </span>
+        ) : null}
       </div>
       <div className="flex flex-col items-center gap-0.5 pr-1 flex-shrink-0">
         <Flame size={18} className="text-realorange" />
@@ -148,17 +156,36 @@ export const HypeView = () => {
       {/* Bento Category Filter */}
       {renderBentoGrid()}
 
+      <div className="px-5 mb-6">
+        <StoreFilterChips
+          stores={STORE_FILTERS}
+          activeStore={activeStore}
+          onChange={setActiveStore}
+        />
+      </div>
+
       {/* Active filter pill */}
-      {activeCategory && (
-        <div className="px-5 mb-4 flex items-center gap-2">
+      {(activeCategory || activeStore !== 'Alle') && (
+        <div className="px-5 mb-4 flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-400 font-medium">Filter:</span>
-          <button
-            onClick={() => setActiveCategory(null)}
-            className="inline-flex items-center gap-1 bg-realgreen/10 text-realgreen text-xs font-semibold px-3 py-1 rounded-full transition-colors hover:bg-realgreen/20"
-          >
-            {activeCategory}
-            <span className="ml-1 text-[10px]">✕</span>
-          </button>
+          {activeCategory ? (
+            <button
+              onClick={() => setActiveCategory(null)}
+              className="inline-flex items-center gap-1 bg-realgreen/10 text-realgreen text-xs font-semibold px-3 py-1 rounded-full transition-colors hover:bg-realgreen/20"
+            >
+              {activeCategory}
+              <span className="ml-1 text-[10px]">✕</span>
+            </button>
+          ) : null}
+          {activeStore !== 'Alle' ? (
+            <button
+              onClick={() => setActiveStore('Alle')}
+              className="inline-flex items-center gap-1 rounded-full bg-[#FDE7DE] px-3 py-1 text-xs font-semibold text-[#B45309] transition-colors hover:bg-[#FAD8C9]"
+            >
+              {activeStore}
+              <span className="ml-1 text-[10px]">✕</span>
+            </button>
+          ) : null}
         </div>
       )}
 
@@ -176,10 +203,10 @@ export const HypeView = () => {
           <div className="text-center py-16">
             <span className="text-4xl mb-3 block">📭</span>
             <p className="text-slate-400 text-sm font-medium">
-              Noch keine Produkte vorhanden.
+              Keine Hype-Produkte fuer diese Filter gefunden.
             </p>
             <p className="text-slate-300 text-xs mt-1">
-              Scanne Produkte, um den Hype zu starten!
+              Aendere den Supermarkt oder die Kategorie, um mehr Treffer zu sehen.
             </p>
           </div>
         )}
