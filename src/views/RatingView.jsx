@@ -15,7 +15,7 @@ import {
   validateRealisticPrice,
 } from '../utils/pricing';
 
-export const RatingView = ({ onTabChange }) => {
+export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
   const { currentProduct, addReview, searchProducts, stores } = useShop();
   const { currentUser, requireAuth } = useAuth();
   const [rating, setRating] = useState(0);
@@ -91,8 +91,12 @@ export const RatingView = ({ onTabChange }) => {
       setPrice('');
 
       setTimeout(() => {
-        onTabChange('community');
-      }, 1500);
+        if (onReviewSubmitted) {
+          onReviewSubmitted(currentProduct);
+        } else {
+          onTabChange('community');
+        }
+      }, 1200);
     } catch (error) {
       console.error('Fehler beim Speichern:', error);
       alert(error?.message || 'Fehler beim Speichern der Bewertung');

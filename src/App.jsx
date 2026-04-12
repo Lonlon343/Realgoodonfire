@@ -13,11 +13,17 @@ import { RatingView } from './views/RatingView';
 
 function App() {
   const [activeTab, setActiveTab] = useState('home');
+  const [reviewedProduct, setReviewedProduct] = useState(null);
+
+  const handleReviewSubmitted = (product) => {
+    setReviewedProduct(product);
+    setActiveTab('home');
+  };
 
   const renderView = () => {
     switch (activeTab) {
       case 'home':
-        return <HomeView onTabChange={setActiveTab} />;
+        return <HomeView onTabChange={setActiveTab} initialDetailProduct={reviewedProduct} onInitialDetailConsumed={() => setReviewedProduct(null)} />;
       case 'hype':
         return <HypeView />;
       case 'scanner':
@@ -27,9 +33,9 @@ function App() {
       case 'profile':
         return <ProfileView />;
       case 'rate':
-        return <RatingView onTabChange={setActiveTab} />;
+        return <RatingView onTabChange={setActiveTab} onReviewSubmitted={handleReviewSubmitted} />;
       default:
-        return <HomeView onTabChange={setActiveTab} />;
+        return <HomeView onTabChange={setActiveTab} initialDetailProduct={reviewedProduct} onInitialDetailConsumed={() => setReviewedProduct(null)} />;
     }
   };
 

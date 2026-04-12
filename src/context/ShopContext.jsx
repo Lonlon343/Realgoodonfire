@@ -8,7 +8,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  increment,
   limit,
   onSnapshot,
   orderBy,
@@ -443,19 +442,27 @@ export const ShopProvider = ({ children }) => {
     const reviewRef = await addDoc(collection(db, 'reviews'), reviewPayload);
 
     if (review.productId) {
-      const productUpdatePayload = {
-        reviewCount: increment(1),
-      };
+      const productRef = doc(db, 'products', review.productId);
 
-      if (isDisplayablePrice(parsedPrice)) {
-        productUpdatePayload.price = parsedPrice;
-      }
+      await runTransaction(db, async (transaction) => {
+        const productSnapshot = await transaction.get(productRef);
+        const existingData = productSnapshot.exists() ? productSnapshot.data() : {};
+        const currentCount = typeof existingData.reviewCount === 'number' ? existingData.reviewCount : 0;
+        const currentAverage = typeof existingData.averageRating === 'number' ? existingData.averageRating : 0;
+        const newCount = currentCount + 1;
+        const newAverage = Math.round(((currentAverage * currentCount) + (review.rating || 0)) / newCount * 10) / 10;
 
-      await setDoc(
-        doc(db, 'products', review.productId),
-        productUpdatePayload,
-        { merge: true }
-      );
+        const productUpdatePayload = {
+          reviewCount: newCount,
+          averageRating: newAverage,
+        };
+
+        if (isDisplayablePrice(parsedPrice)) {
+          productUpdatePayload.price = parsedPrice;
+        }
+
+        transaction.set(productRef, productUpdatePayload, { merge: true });
+      });
 
       if (isDisplayablePrice(parsedPrice)) {
         setCurrentProduct((previousProduct) => (

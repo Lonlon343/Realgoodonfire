@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Flame, ArrowRightLeft, PencilLine, Star, ThumbsDown, ThumbsUp, User } from 'lucide-react';
+import { Flame, ArrowRightLeft, PencilLine, Search, Star, ThumbsDown, ThumbsUp, User, X } from 'lucide-react';
 import { ProductDetailModal } from '../components/ProductDetailModal';
 import { ProductArtwork } from '../components/ProductArtwork';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
 import { formatPriceDisplay, isDisplayablePrice, parsePriceValue } from '../utils/pricing';
 
-export const HomeView = ({ onTabChange }) => {
+export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailConsumed }) => {
   const {
     getTrendingProducts,
     loadHomeData,
@@ -16,12 +16,17 @@ export const HomeView = ({ onTabChange }) => {
     recentReviews,
     isLoadingHome,
     voteOnDupe,
+    searchProducts,
   } = useShop();
   const { currentUser: user, logout, setIsLoginModalOpen, clearAuthError, requireAuth } = useAuth();
   const [trendingProducts, setTrendingProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [votingState, setVotingState] = useState({});
   const [detailProduct, setDetailProduct] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef(null);
   const dupeCardRefs = useRef(new Map());
   const previousDupePositions = useRef(new Map());
 
@@ -59,6 +64,45 @@ export const HomeView = ({ onTabChange }) => {
       unsubscribe?.();
     };
   }, [subscribeTopDupes]);
+
+  useEffect(() => {
+    if (initialDetailProduct) {
+      setDetailProduct(initialDetailProduct);
+      onInitialDetailConsumed?.();
+    }
+  }, [initialDetailProduct, onInitialDetailConsumed]);
+
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    const trimmed = searchQuery.trim();
+    if (trimmed.length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const results = await searchProducts(trimmed);
+        setSearchResults(results);
+      } catch (error) {
+        console.error('Suchfehler:', error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery, searchProducts]);
 
   useLayoutEffect(() => {
     const nextPositions = new Map();
@@ -418,6 +462,75 @@ export const HomeView = ({ onTabChange }) => {
         <p className="text-slate-500 text-sm mb-6 font-medium">
           Entdecke die besten Snacks in deiner Stadt.
         </p>
+
+        {/* Search Bar */}
+        <div className="relative mb-6">
+          <div className="relative">
+            <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Produkt suchen..."
+              className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-10 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(''); setSearchResults([]); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+
+          {searchQuery.trim().length >= 2 && (
+            <div className="absolute inset-x-0 top-full z-30 mt-1.5 rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden max-h-80 overflow-y-auto">
+              {isSearching ? (
+                <div className="flex items-center justify-center py-6">
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-emerald-500 border-t-transparent" />
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-slate-400">
+                  Kein Produkt gefunden.
+                </div>
+              ) : (
+                searchResults.map((product) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => { openProductDetail(product); setSearchQuery(''); setSearchResults([]); }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 active:bg-slate-100"
+                  >
+                    <div className="h-10 w-10 shrink-0 rounded-xl overflow-hidden bg-slate-100">
+                      <ProductArtwork
+                        src={product.image}
+                        alt={product.name}
+                        name={product.name}
+                        brand={product.brand}
+                        category={product.category}
+                        variant="thumb"
+                        className="h-full w-full"
+                        imageClassName="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-900">{product.name}</p>
+                      <p className="truncate text-xs text-slate-400">{[product.brand, product.category].filter(Boolean).join(' · ')}</p>
+                    </div>
+                    {product.averageRating > 0 && (
+                      <div className="flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                        <Star size={12} className="fill-emerald-500 text-emerald-500" />
+                        {product.averageRating.toFixed(1)}
+                      </div>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Login Action Area */}
         {!user ? (
