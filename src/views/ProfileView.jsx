@@ -1,47 +1,50 @@
-
-import { Flame, ScanBarcode, ShieldCheck, Star, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Flame, Loader2, ScanBarcode, ShieldCheck, Star, Trash2 } from 'lucide-react';
+import { DatenschutzModal } from '../components/DatenschutzModal';
+import { StarRating } from '../components/StarRating';
 import { useAuth } from '../context/useAuth';
 import { useShop } from '../context/useShop';
 
-const FALLBACK_HISTORY = [
-  { id: 'placeholder-1', productName: 'Pistazien-Kekse', store: 'Edeka', rating: 5 },
-  { id: 'placeholder-2', productName: 'Berry Kombucha', store: 'Rewe', rating: 4 },
-  { id: 'placeholder-3', productName: 'Nuss-Pli', store: 'Aldi', rating: 5 },
-];
-
 export const ProfileView = () => {
   const { currentUser, setIsLoginModalOpen, clearAuthError } = useAuth();
-  const { reviews } = useShop();
+  const { getUserReviews } = useShop();
 
-  const userReviews = currentUser
-    ? reviews.filter((review) => review.userId === currentUser.uid)
-    : [];
+  const [userReviews, setUserReviews] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isDatenschutzOpen, setIsDatenschutzOpen] = useState(false);
 
-  const recentReviews = userReviews.length > 0 ? userReviews.slice(0, 3) : FALLBACK_HISTORY;
-  const reviewCount = userReviews.length || 12;
-  const hypeCount = userReviews.length
-    ? userReviews.filter((review) => review.rating >= 4).length
-    : 38;
-  const scanCount = userReviews.length ? userReviews.length * 3 : 24;
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      setUserReviews([]);
+      return;
+    }
 
-  const renderStars = (rating) => (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <Star
-          key={star}
-          size={14}
-          strokeWidth={1.8}
-          className={star <= rating ? 'fill-realorange text-realorange' : 'text-slate-200'}
-        />
-      ))}
-    </div>
-  );
+    let isActive = true;
+
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        const reviews = await getUserReviews(currentUser.uid);
+        if (isActive) setUserReviews(reviews);
+      } catch (error) {
+        console.error('Fehler beim Laden der Profil-Reviews:', error);
+        if (isActive) setUserReviews([]);
+      } finally {
+        if (isActive) setIsLoading(false);
+      }
+    };
+
+    load();
+
+    return () => { isActive = false; };
+  }, [currentUser?.uid, getUserReviews]);
+
+  const reviewCount = userReviews.length;
+  const hypeCount = userReviews.filter((r) => r.rating >= 4).length;
+  const recentReviews = userReviews.slice(0, 3);
 
   const handleDelete = () => {
-    const confirmed = window.confirm('Bist du sicher? Alle deine Daten werden gelöscht.');
-    if (confirmed) {
-      console.log('Delete triggered');
-    }
+    window.alert('Konto-Löschung ist aktuell noch nicht verfügbar. Bitte kontaktiere uns direkt.');
   };
 
   if (!currentUser) {
@@ -72,6 +75,8 @@ export const ProfileView = () => {
   return (
     <div className="min-h-screen bg-realbg px-5 pt-8 pb-32">
       <div className="mx-auto max-w-md">
+
+        {/* Avatar + Name */}
         <div className="text-center mb-8 animate-slide-up">
           <div className="mx-auto mb-4 h-28 w-28 overflow-hidden rounded-squircle border border-emerald-100 bg-white p-1 shadow-xl shadow-emerald-100/30">
             <img
@@ -86,35 +91,50 @@ export const ProfileView = () => {
           <p className="mt-2 text-sm font-medium text-slate-400">Foodie Member</p>
         </div>
 
-        <div className="grid grid-cols-2 auto-rows-[118px] gap-4 mb-8 animate-slide-up-delay-1">
-          <div className="row-span-2 rounded-squircle bg-white p-5 shadow-sm border border-slate-100 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-slate-500">Meine Bewertungen</span>
-              <Star size={18} className="text-realorange" />
+        {/* Stats grid */}
+        {isLoading ? (
+          <div className="flex justify-center py-10 mb-8">
+            <Loader2 size={28} className="animate-spin text-realgreen" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 auto-rows-[118px] gap-4 mb-8 animate-slide-up-delay-1">
+            {/* Large tile — review count */}
+            <div className="row-span-2 rounded-squircle bg-white p-5 shadow-sm border border-slate-100 flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-500">Meine Bewertungen</span>
+                <Star size={18} className="text-realorange" />
+              </div>
+              <div>
+                <p className="text-4xl font-black text-slate-900 tracking-tight">{reviewCount}</p>
+                <p className="mt-2 text-sm text-slate-400">
+                  {reviewCount === 0
+                    ? 'Noch nichts bewertet – starte jetzt!'
+                    : 'Dein letzter Eindruck bleibt hier nicht verborgen.'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-4xl font-black text-slate-900 tracking-tight">{reviewCount}</p>
-              <p className="mt-2 text-sm text-slate-400">Dein letzter Eindruck bleibt hier nicht verborgen.</p>
+
+            {/* Hypes tile */}
+            <div className="rounded-squircle bg-white p-4 shadow-sm border border-slate-100 flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-500">Hypes</span>
+                <Flame size={18} className="text-realorange" />
+              </div>
+              <p className="text-3xl font-black text-slate-900 tracking-tight">{hypeCount}</p>
+            </div>
+
+            {/* Scans tile — equals review count since each review = 1 scan */}
+            <div className="rounded-squircle bg-white p-4 shadow-sm border border-slate-100 flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-500">Scans</span>
+                <ScanBarcode size={18} className="text-realgreen" />
+              </div>
+              <p className="text-3xl font-black text-slate-900 tracking-tight">{reviewCount}</p>
             </div>
           </div>
+        )}
 
-          <div className="rounded-squircle bg-white p-4 shadow-sm border border-slate-100 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-slate-500">Hypes</span>
-              <Flame size={18} className="text-realorange" />
-            </div>
-            <p className="text-3xl font-black text-slate-900 tracking-tight">{hypeCount}</p>
-          </div>
-
-          <div className="rounded-squircle bg-white p-4 shadow-sm border border-slate-100 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-slate-500">Scans</span>
-              <ScanBarcode size={18} className="text-realgreen" />
-            </div>
-            <p className="text-3xl font-black text-slate-900 tracking-tight">{scanCount}</p>
-          </div>
-        </div>
-
+        {/* Recent reviews */}
         <section className="animate-slide-up-delay-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-slate-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
@@ -123,25 +143,35 @@ export const ProfileView = () => {
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">History</span>
           </div>
 
-          <div className="space-y-3">
-            {recentReviews.map((review, index) => (
-              <div key={review.id || `${review.productName}-${index}`} className="rounded-squircle bg-white px-4 py-4 shadow-sm border border-slate-100 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-slate-900">{review.productName}</p>
-                  <p className="mt-1 text-xs text-slate-400">{review.store}</p>
+          {isLoading ? null : recentReviews.length === 0 ? (
+            <div className="rounded-squircle border border-slate-200/70 bg-white px-5 py-8 text-center text-sm text-slate-400 shadow-sm">
+              Noch keine Bewertungen. Scanne dein erstes Produkt! 🛒
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentReviews.map((review) => (
+                <div
+                  key={review.id}
+                  className="rounded-squircle bg-white px-4 py-4 shadow-sm border border-slate-100 flex items-center justify-between gap-4"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-slate-900">{review.productName}</p>
+                    <p className="mt-1 text-xs text-slate-400">{review.store || '—'}</p>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <StarRating rating={review.rating} size={14} strokeWidth={1.8} activeClass="fill-realorange text-realorange" />
+                  </div>
                 </div>
-                <div className="flex-shrink-0">
-                  {renderStars(review.rating)}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
 
+        {/* Footer actions */}
         <section className="mt-8 border-t border-slate-200 pt-5 animate-slide-up-delay-3">
           <button
             type="button"
-            onClick={() => console.log('Open Datenschutz & Impressum')}
+            onClick={() => setIsDatenschutzOpen(true)}
             className="w-full flex items-center gap-3 rounded-squircle px-4 py-3 text-left text-sm font-medium text-slate-500 transition-colors hover:bg-slate-50"
           >
             <ShieldCheck size={16} className="text-slate-400" />
@@ -157,7 +187,13 @@ export const ProfileView = () => {
             <span>Konto löschen</span>
           </button>
         </section>
+
       </div>
+
+      <DatenschutzModal
+        isOpen={isDatenschutzOpen}
+        onClose={() => setIsDatenschutzOpen(false)}
+      />
     </div>
   );
 };

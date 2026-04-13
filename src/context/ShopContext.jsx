@@ -1,6 +1,6 @@
 // FILE: src/context/ShopContext.jsx
 import { createContext, useCallback, useEffect, useState } from 'react';
-import { MOCK_PRODUCTS, STORES } from '../data';
+import { MOCK_PRODUCTS, STORES, getStoreQueryValues } from '../data';
 import { db } from '../firebase';
 import {
   addDoc,
@@ -104,6 +104,7 @@ export const ShopProvider = ({ children }) => {
   const { currentUser } = useAuth();
   const [products] = useState(MOCK_PRODUCTS);
   const [currentProduct, setCurrentProduct] = useState(null);
+  const [trendingProducts, setTrendingProducts] = useState([]);
   const [newestProducts, setNewestProducts] = useState([]);
   const [topDupes, setTopDupes] = useState([]);
   const [recentReviews, setRecentReviews] = useState([]);
@@ -122,11 +123,6 @@ export const ShopProvider = ({ children }) => {
   useEffect(() => {
     localStorage.setItem('realgood_reviews', JSON.stringify(reviews));
   }, [reviews]);
-
-  const getTrendingProducts = useCallback(async () => {
-    const { docs } = await getHypeProducts();
-    return docs.slice(0, 5);
-  }, []);
 
   const getNewestProducts = useCallback(async () => {
     const productsData = await fetchNewestProducts();
@@ -156,36 +152,51 @@ export const ShopProvider = ({ children }) => {
   ), []);
 
   const searchProducts = useCallback(async (searchTerm) => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const term = searchTerm.trim().toLowerCase();
 
-    if (normalizedSearch.length < 2) {
+    if (term.length < 2) {
       return [];
     }
 
-    const snapshot = await getDocs(collection(db, 'products'));
+    const endTerm = term + '\uf8ff';
 
-    return snapshot.docs
-      .map((docSnapshot) => ({
-        id: docSnapshot.id,
-        ...docSnapshot.data(),
-      }))
-      .filter((product) => {
-        const searchableText = [product.name, product.brand, product.category]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
+    // Run parallel prefix-range queries on nameLower and brandLower.
+    // These use Firestore's single-field auto-indexes — no composite index needed.
+    const [nameSnapshot, brandSnapshot] = await Promise.all([
+      getDocs(query(
+        collection(db, 'products'),
+        where('nameLower', '>=', term),
+        where('nameLower', '<=', endTerm),
+        limit(12)
+      )),
+      getDocs(query(
+        collection(db, 'products'),
+        where('brandLower', '>=', term),
+        where('brandLower', '<=', endTerm),
+        limit(12)
+      )),
+    ]);
 
-        return searchableText.includes(normalizedSearch);
-      })
-      .sort((firstProduct, secondProduct) => {
-        const firstStartsWith = firstProduct.name?.toLowerCase().startsWith(normalizedSearch) ? 1 : 0;
-        const secondStartsWith = secondProduct.name?.toLowerCase().startsWith(normalizedSearch) ? 1 : 0;
+    // Merge and deduplicate by document id
+    const seen = new Set();
+    const results = [];
 
-        if (firstStartsWith !== secondStartsWith) {
-          return secondStartsWith - firstStartsWith;
+    for (const snapshot of [nameSnapshot, brandSnapshot]) {
+      for (const docSnapshot of snapshot.docs) {
+        if (!seen.has(docSnapshot.id)) {
+          seen.add(docSnapshot.id);
+          results.push({ id: docSnapshot.id, ...docSnapshot.data() });
         }
+      }
+    }
 
-        return (secondProduct.reviewCount || 0) - (firstProduct.reviewCount || 0);
+    // Sort: name-prefix matches first, then by review count
+    return results
+      .sort((a, b) => {
+        const aName = (a.nameLower || '').startsWith(term) ? 1 : 0;
+        const bName = (b.nameLower || '').startsWith(term) ? 1 : 0;
+        if (aName !== bName) return bName - aName;
+        return (b.reviewCount || 0) - (a.reviewCount || 0);
       })
       .slice(0, 8);
   }, []);
@@ -210,11 +221,18 @@ export const ShopProvider = ({ children }) => {
     return getPersistablePrice(productSnapshot.data()?.price);
   }, []);
 
-  const getFeedActivity = useCallback(async (lastVisibleDoc = null) => {
-    const feedConstraints = [
-      orderBy('createdAt', 'desc'),
-      limit(15),
-    ];
+  const getFeedActivity = useCallback(async (lastVisibleDoc = null, storeFilter = 'Alle') => {
+    const storeQueryValues = getStoreQueryValues(storeFilter);
+    const feedConstraints = [];
+
+    // When a store is selected, filter server-side using the store's known name variants.
+    // This requires the composite index on store (ASC) + createdAt (DESC).
+    if (storeQueryValues.length > 0) {
+      feedConstraints.push(where('store', 'in', storeQueryValues));
+    }
+
+    feedConstraints.push(orderBy('createdAt', 'desc'));
+    feedConstraints.push(limit(15));
 
     if (lastVisibleDoc) {
       feedConstraints.push(startAfter(lastVisibleDoc));
@@ -259,6 +277,22 @@ export const ShopProvider = ({ children }) => {
     };
   }, []);
 
+  const getUserReviews = useCallback(async (userId) => {
+    if (!userId) {
+      return [];
+    }
+
+    const userReviewsQuery = query(
+      collection(db, 'reviews'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
+
+    const snapshot = await getDocs(userReviewsQuery);
+    return snapshot.docs.map(mapReviewDoc);
+  }, []);
+
   const getRecentReviews = useCallback(async () => {
     const recentReviewsQuery = query(
       collection(db, 'reviews'),
@@ -277,47 +311,37 @@ export const ShopProvider = ({ children }) => {
     setIsLoadingHome(true);
 
     try {
-      const [productsResult, dupesResult, reviewsResult] = await Promise.allSettled([
-        fetchNewestProducts(),
-        fetchTopDupes(),
-        getRecentReviews(),
+      // topDupes are handled by subscribeTopDupes (real-time), so not fetched here.
+      const [trendingResult, productsResult, reviewsResult] = await Promise.allSettled([
+        getHypeProducts(),           // trending = top by reviewCount
+        fetchNewestProducts(),       // newest = sorted by createdAt
+        getRecentReviews(),          // 3 most recent reviews for the social strip
       ]);
 
+      const trendingData = trendingResult.status === 'fulfilled'
+        ? trendingResult.value.docs.slice(0, 5)
+        : [];
       const productsData = productsResult.status === 'fulfilled' ? productsResult.value : [];
-      const dupesData = dupesResult.status === 'fulfilled' ? dupesResult.value : [];
       const reviewsData = reviewsResult.status === 'fulfilled' ? reviewsResult.value : [];
 
+      if (trendingResult.status === 'rejected') {
+        console.error('Fehler beim Laden der Trending-Produkte:', trendingResult.reason);
+      }
       if (productsResult.status === 'rejected') {
         console.error('Fehler beim Laden neuer Produkte:', productsResult.reason);
       }
-
-      if (dupesResult.status === 'rejected') {
-        console.error('Fehler beim Laden der Dupes:', dupesResult.reason);
-      }
-
       if (reviewsResult.status === 'rejected') {
         console.error('Fehler beim Laden der letzten Reviews:', reviewsResult.reason);
       }
 
+      setTrendingProducts(trendingData);
       setNewestProducts(productsData);
-      setTopDupes(dupesData);
       setRecentReviews(reviewsData);
-
-      return {
-        newestProducts: productsData,
-        topDupes: dupesData,
-        recentReviews: reviewsData,
-      };
     } catch (error) {
       console.error('Fehler beim Laden der Home-Daten:', error);
+      setTrendingProducts([]);
       setNewestProducts([]);
-      setTopDupes([]);
       setRecentReviews([]);
-      return {
-        newestProducts: [],
-        topDupes: [],
-        recentReviews: [],
-      };
     } finally {
       setIsLoadingHome(false);
     }
@@ -325,8 +349,6 @@ export const ShopProvider = ({ children }) => {
 
   // Action: Fetch data from OpenFoodFacts
   const fetchProductByBarcode = async (barcode) => {
-    console.log("1. Starte API-Abfrage für:", barcode);
-
     try {
       const response = await fetch(
         `https://world.openfoodfacts.org/api/v2/product/${barcode}?fields=code,product_name,brands,image_front_url,nutriscore_grade,categories_tags`,
@@ -338,14 +360,11 @@ export const ShopProvider = ({ children }) => {
         }
       );
 
-      console.log("2. API Antwort Status:", response.status);
-
       if (!response.ok) {
         throw new Error('Netzwerk-Antwort war nicht ok');
       }
 
       const data = await response.json();
-      console.log("3. API Daten erhalten:", data);
 
       if (data.status === 1 && data.product) {
         const category = mapCategory(data.product.categories_tags || []);
@@ -361,8 +380,6 @@ export const ShopProvider = ({ children }) => {
           source: 'api'
         };
 
-        console.log("4. Produkt verarbeitet:", productData);
-
         // Save product to Firestore without resetting reviewCount or createdAt on repeat scans.
         try {
           const productRef = doc(db, 'products', productData.id);
@@ -375,12 +392,16 @@ export const ShopProvider = ({ children }) => {
             image: productData.image,
             nutriScore: productData.nutriScore || null,
             category: productData.category,
+            // Lowercase fields enable efficient prefix search queries
+            nameLower: productData.name.toLowerCase(),
+            brandLower: (productData.brand || '').toLowerCase(),
           };
 
           resolvedProductData = {
             ...productData,
             ...(storedPrice !== null ? { price: storedPrice } : {}),
             reviewCount: existingData?.reviewCount || 0,
+            averageRating: existingData?.averageRating || 0,
           };
 
           await setDoc(
@@ -391,10 +412,10 @@ export const ShopProvider = ({ children }) => {
                   ...basePayload,
                   createdAt: serverTimestamp(),
                   reviewCount: 0,
+                  averageRating: 0,
                 },
             { merge: true }
           );
-          console.log("5. Produkt in Firestore gespeichert");
         } catch (fsErr) {
           console.warn("Firestore-Speichern fehlgeschlagen (App läuft weiter):", fsErr);
         }
@@ -402,11 +423,10 @@ export const ShopProvider = ({ children }) => {
         setCurrentProduct(resolvedProductData || productData);
         return resolvedProductData || productData;
       } else {
-        console.warn("Produkt nicht in der Datenbank gefunden. Status:", data.status);
         throw new Error(`Produkt mit Barcode ${barcode} nicht gefunden`);
       }
     } catch (error) {
-      console.error("FEHLER beim API Aufruf:", error);
+      console.error("Fehler beim Barcode-Lookup:", error);
       throw error;
     }
   };
@@ -654,17 +674,18 @@ export const ShopProvider = ({ children }) => {
     getFeedActivity,
     getProduct,
     getProductReviews,
+    getUserReviews,
     getNewestProducts,
     getRecentReviews,
     searchProducts,
     getTopDupes,
     subscribeTopDupes,
-    getTrendingProducts,
     fetchProductByBarcode,
     loadHomeData,
     createDupeLink,
     voteOnDupe,
-    currentProduct, 
+    currentProduct,
+    trendingProducts,
     newestProducts,
     topDupes,
     recentReviews,

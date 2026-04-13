@@ -115,9 +115,12 @@ service cloud.firestore {
         'category',
         'price',
         'createdAt',
-        'reviewCount'
+        'reviewCount',
+        'averageRating',
+        'nameLower',
+        'brandLower'
       ])
-      && isValidOptionalPrice(request.resource.data.price);
+      && isValidOptionalPrice(request.resource.data.get('price', null));
       allow delete: if false;
     }
 

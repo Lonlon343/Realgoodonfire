@@ -1,15 +1,18 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Flame, ArrowRightLeft, PencilLine, Search, Star, ThumbsDown, ThumbsUp, User, X } from 'lucide-react';
+import { Flame, ArrowRightLeft, Search, ThumbsDown, ThumbsUp, User, X } from 'lucide-react';
 import { ProductDetailModal } from '../components/ProductDetailModal';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { ProductArtwork } from '../components/ProductArtwork';
+import { StarRating } from '../components/StarRating';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
-import { formatPriceDisplay, isDisplayablePrice, parsePriceValue } from '../utils/pricing';
+import { formatPriceDisplay, isDisplayablePrice } from '../utils/pricing';
+import { formatTimeAgo, getAvatarUrl } from '../utils/formatters';
 
 export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailConsumed }) => {
   const {
-    getTrendingProducts,
     loadHomeData,
+    trendingProducts,
     newestProducts,
     subscribeTopDupes,
     topDupes,
@@ -19,9 +22,9 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
     searchProducts,
   } = useShop();
   const { currentUser: user, logout, setIsLoginModalOpen, clearAuthError, requireAuth } = useAuth();
-  const [trendingProducts, setTrendingProducts] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [votingState, setVotingState] = useState({});
+  const [voteErrors, setVoteErrors] = useState({});
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [detailProduct, setDetailProduct] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -30,39 +33,15 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
   const dupeCardRefs = useRef(new Map());
   const previousDupePositions = useRef(new Map());
 
+  // Single load on mount: trending + newest + recent reviews
   useEffect(() => {
-    const loadTrending = async () => {
-      setIsLoading(true);
-      try {
-        const trending = await getTrendingProducts?.() || [];
-        setTrendingProducts(trending);
-      } catch (error) {
-        console.error('Fehler beim Laden von Trending Products:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadTrending();
-  }, [getTrendingProducts]);
-
-  useEffect(() => {
-    const loadHomeSections = async () => {
-      try {
-        await loadHomeData();
-      } catch (error) {
-        console.error('Fehler beim Laden der Home-Sektionen:', error);
-      }
-    };
-
-    loadHomeSections();
+    loadHomeData();
   }, [loadHomeData]);
 
+  // Real-time listener for dupe votes/ranking changes
   useEffect(() => {
     const unsubscribe = subscribeTopDupes?.();
-
-    return () => {
-      unsubscribe?.();
-    };
+    return () => { unsubscribe?.(); };
   }, [subscribeTopDupes]);
 
   useEffect(() => {
@@ -150,40 +129,6 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
     previousDupePositions.current = nextPositions;
   }, [topDupes]);
 
-  const renderPremiumStars = (rating) => {
-    const normalizedRating = Math.round(rating || 0);
-
-    return (
-      <div className="flex gap-[2px]">
-        {[...Array(5)].map((_, i) => (
-          <Star
-            key={i}
-            size={14}
-            className={i < normalizedRating ? 'fill-emerald-500 text-emerald-500' : 'text-slate-200'}
-            strokeWidth={1.5}
-          />
-        ))}
-      </div>
-    );
-  };
-
-  const formatTimeAgo = (timestamp) => {
-    const date = timestamp?.toDate?.() || (timestamp instanceof Date ? timestamp : null);
-
-    if (!date) return 'gerade eben';
-
-    const diffMs = Date.now() - date.getTime();
-    const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
-
-    if (diffMinutes < 1) return 'gerade eben';
-    if (diffMinutes < 60) return `vor ${diffMinutes} Min.`;
-
-    const diffHours = Math.floor(diffMinutes / 60);
-    if (diffHours < 24) return `vor ${diffHours} Std.`;
-
-    const diffDays = Math.floor(diffHours / 24);
-    return `vor ${diffDays} Tag${diffDays === 1 ? '' : 'en'}`;
-  };
 
   const getReviewPreview = (comment) => {
     const trimmedComment = comment?.trim() || '';
@@ -197,13 +142,6 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
       : trimmedComment;
   };
 
-  const getReviewAvatar = (review) => {
-    if (review.userAvatar) {
-      return review.userAvatar;
-    }
-
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(review.userName || 'Foodie')}&background=f8f9fa&color=333`;
-  };
 
   const getVoteButtonClasses = (type, isActive, isBusy) => {
     const activeClasses = type === 'up'
@@ -220,27 +158,39 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
     ].join(' ');
   };
 
+  const showVoteError = (dupeId, message) => {
+    setVoteErrors((prev) => ({ ...prev, [dupeId]: message }));
+    setTimeout(() => {
+      setVoteErrors((prev) => {
+        const next = { ...prev };
+        delete next[dupeId];
+        return next;
+      });
+    }, 4000);
+  };
+
   const handleDupeVote = (dupeId, type) => {
     requireAuth(async () => {
-      if (votingState[dupeId]) {
-        return;
-      }
+      if (votingState[dupeId]) return;
 
-      setVotingState((prevState) => ({
-        ...prevState,
-        [dupeId]: type,
-      }));
+      setVotingState((prev) => ({ ...prev, [dupeId]: type }));
 
       try {
         await voteOnDupe(dupeId, type);
       } catch (error) {
         console.error('Fehler beim Dupe-Vote:', error);
-        alert(error?.message || 'Dein Vote konnte nicht gespeichert werden.');
+        const isPermissionError = error?.code === 'permission-denied';
+        showVoteError(
+          dupeId,
+          isPermissionError
+            ? 'Vote nicht möglich — bitte versuche es gleich erneut.'
+            : 'Dein Vote konnte nicht gespeichert werden.'
+        );
       } finally {
-        setVotingState((prevState) => {
-          const nextState = { ...prevState };
-          delete nextState[dupeId];
-          return nextState;
+        setVotingState((prev) => {
+          const next = { ...prev };
+          delete next[dupeId];
+          return next;
         });
       }
     });
@@ -286,29 +236,16 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
         price: item.dupePrice ?? null,
       };
 
-  const onPriceEditClick = (productType, currentPrice) => {
-    window.prompt(
-      'Stimmt der Preis nicht? Neuen Preis vorschlagen:',
-      isDisplayablePrice(currentPrice) ? parsePriceValue(currentPrice).toFixed(2) : ''
-    );
-  };
-
-  const renderEditablePrice = (productType, price, toneClassName) => {
+  const renderPrice = (price, toneClassName) => {
     const hasPrice = isDisplayablePrice(price);
 
     return (
-      <button
-        type="button"
-        onClick={() => onPriceEditClick(productType, price)}
-        className={[
-          'group inline-flex items-center gap-1 border-b border-dotted pb-0.5 text-sm font-bold transition-colors',
-          hasPrice ? `${toneClassName} border-current/35 hover:border-current/70` : 'border-slate-300 text-slate-400 hover:border-slate-400 hover:text-slate-600',
-        ].join(' ')}
-        title={`Preis für ${productType} vorschlagen`}
-      >
-        <span>{formatPriceDisplay(price)}</span>
-        <PencilLine size={11} className="opacity-0 transition-opacity group-hover:opacity-100" />
-      </button>
+      <span className={[
+        'text-sm font-bold',
+        hasPrice ? toneClassName : 'text-slate-400',
+      ].join(' ')}>
+        {formatPriceDisplay(price)}
+      </span>
     );
   };
 
@@ -402,17 +339,13 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
     </div>
   );
 
-  const handleHeaderAuthClick = async () => {
+  const handleHeaderAuthClick = () => {
     if (!user) {
       clearAuthError();
       setIsLoginModalOpen(true);
       return;
     }
-
-    const shouldLogout = window.confirm('Möchtest du dich abmelden?');
-    if (shouldLogout) {
-      await logout();
-    }
+    setShowLogoutModal(true);
   };
 
   const handleWriteReviewFromDetail = () => {
@@ -564,13 +497,17 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
           <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
             Hype Radar <Flame size={20} className="text-orange-500 fill-orange-500" />
           </h3>
-          <button className="text-emerald-600 text-[13px] font-semibold hover:text-emerald-700 transition-colors hover:underline">
+          <button
+            type="button"
+            onClick={() => onTabChange('hype')}
+            className="text-emerald-600 text-[13px] font-semibold hover:text-emerald-700 transition-colors hover:underline"
+          >
             Alle ansehen
           </button>
         </div>
 
         <div className="flex overflow-x-auto gap-4 pb-4 scrollbar-hide -mx-5 px-5">
-          {isLoading ? (
+          {isLoadingHome ? (
             <div className="w-full flex justify-center py-10">
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-500 border-t-transparent"></div>
             </div>
@@ -703,7 +640,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
                         <span className="text-[9px] text-slate-500 uppercase tracking-widest font-semibold mb-1">ORIGINAL</span>
                         <span className="text-[13px] font-bold text-slate-800 text-center line-clamp-2">{item.originalName}</span>
                       </button>
-                    <span className="mt-0.5">{renderEditablePrice('Originalprodukt', item.originalPrice, 'text-red-500')}</span>
+                    <span className="mt-0.5">{renderPrice(item.originalPrice, 'text-red-500')}</span>
                   </div>
 
                   <div className="flex flex-col items-center justify-center absolute left-1/2 transform -translate-x-1/2 top-4">
@@ -734,7 +671,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
                       <span className="text-[9px] text-emerald-600 uppercase tracking-widest font-bold mb-1">BESTER DUPE</span>
                       <span className="text-[13px] font-bold text-slate-800 text-center line-clamp-2">{item.dupeName}</span>
                     </button>
-                    <span className="mt-0.5">{renderEditablePrice('Dupe', item.dupePrice, 'text-emerald-600')}</span>
+                    <span className="mt-0.5">{renderPrice(item.dupePrice, 'text-emerald-600')}</span>
                   </div>
                 </div>
 
@@ -776,6 +713,12 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
                     </div>
                   </div>
                 </div>
+
+                {voteErrors[item.id] && (
+                  <div className="mt-2 rounded-squircle border border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
+                    {voteErrors[item.id]}
+                  </div>
+                )}
                 </div>
               );
             })}
@@ -805,7 +748,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
               >
                 <div className="w-12 h-12 rounded-full p-[2px] border-[2.5px] border-emerald-50/0 group-hover:border-emerald-500/30 transition-colors flex-shrink-0 shimmer-bg shrink-0">
                   <img
-                    src={getReviewAvatar(review)}
+                    src={getAvatarUrl(review)}
                     alt={review.userName || 'Foodie'}
                     className="w-full h-full rounded-full object-cover"
                   />
@@ -817,7 +760,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
                         <span className="truncate font-bold text-slate-900 text-sm tracking-tight">
                           {review.userName || 'Foodie'}
                         </span>
-                        {renderPremiumStars(review.rating)}
+                        <StarRating rating={review.rating} size={14} strokeWidth={1.5} />
                       </div>
                       <p className="truncate text-[11px] font-medium uppercase tracking-wide text-slate-400">
                         {review.productName || 'Unbekanntes Produkt'}
@@ -846,6 +789,20 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
         product={detailProduct}
         onClose={closeProductDetail}
         onWriteReview={handleWriteReviewFromDetail}
+      />
+
+      <ConfirmModal
+        isOpen={showLogoutModal}
+        title="Abmelden?"
+        message="Du wirst aus deinem Foodie-Konto ausgeloggt."
+        confirmLabel="Abmelden"
+        cancelLabel="Abbrechen"
+        danger
+        onConfirm={async () => {
+          setShowLogoutModal(false);
+          await logout();
+        }}
+        onCancel={() => setShowLogoutModal(false)}
       />
 
     </div>

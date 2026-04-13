@@ -26,6 +26,7 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [priceError, setPriceError] = useState('');
+  const [submitError, setSubmitError] = useState('');
   const [isDupeModalOpen, setIsDupeModalOpen] = useState(false);
   const draftPriceValidation = validateRealisticPrice(price, { allowEmpty: true });
   const dupeProductForModal = {
@@ -53,7 +54,7 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
 
   const handleSubmit = async () => {
     if (rating === 0) {
-      alert('Bitte eine Bewertung geben');
+      setSubmitError('Bitte wähle zuerst eine Sternebewertung.');
       return;
     }
 
@@ -68,6 +69,7 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
 
     setIsSubmitting(true);
     setPriceError('');
+    setSubmitError('');
 
     try {
       const review = {
@@ -82,7 +84,6 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
         date: new Date().toISOString(),
       };
 
-      console.log('💾 Speichere Review:', review);
       await addReview(review, currentUser);
 
       setSuccess(true);
@@ -99,7 +100,7 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
       }, 1200);
     } catch (error) {
       console.error('Fehler beim Speichern:', error);
-      alert(error?.message || 'Fehler beim Speichern der Bewertung');
+      setSubmitError(error?.message || 'Fehler beim Speichern der Bewertung.');
     } finally {
       setIsSubmitting(false);
     }
@@ -273,6 +274,13 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
           />
           <p className="text-xs text-slate-500 mt-2">{comment.length}/500</p>
         </div>
+
+        {/* Submit error */}
+        {submitError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+            {submitError}
+          </div>
+        )}
 
         {/* Submit Button */}
         <button

@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
     "@yudiel/react-qr-scanner": "^2.5.1",
     "autoprefixer": "^10.4.23",
     "firebase": "^12.12.0",
@@ -20,6 +22,7 @@
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.0",
     "@eslint/js": "^9.39.1",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/react": "^19.2.5",

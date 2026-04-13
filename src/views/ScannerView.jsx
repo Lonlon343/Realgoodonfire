@@ -10,17 +10,13 @@ export const ScannerView = ({ onTabChange }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Wird aufgerufen, wenn der Scanner was findet
   const handleScan = async (detectedCodes) => {
-    // Die Library gibt ein Array zurück, wir nehmen den ersten Code
     if (detectedCodes && detectedCodes.length > 0) {
       const code = detectedCodes[0].rawValue;
-      console.log("✅ Scanner hat gefunden:", code);
-      
-      // Verhindern, dass er 100x pro Sekunde scannt
+
       setIsLoading(true);
       setErrorMsg('');
-      
+
       try {
         const product = await fetchProductByBarcode(code);
         setIsLoading(false);
@@ -30,21 +26,19 @@ export const ScannerView = ({ onTabChange }) => {
           setTimeout(() => onTabChange('rate'), 300);
         }
       } catch (error) {
-        console.error('❌ Fehler beim Laden:', error);
         setErrorMsg(`Produkt ${code} nicht gefunden.`);
         setIsLoading(false);
       }
     }
   };
 
-  // Wird aufgerufen, wenn wir manuell tippen
   const handleManualSubmit = async (e) => {
     e.preventDefault();
     if (!manualCode.trim()) return;
 
     setIsLoading(true);
     setErrorMsg('');
-    
+
     try {
       const product = await fetchProductByBarcode(manualCode);
       setIsLoading(false);
@@ -55,7 +49,6 @@ export const ScannerView = ({ onTabChange }) => {
         setTimeout(() => onTabChange('rate'), 300);
       }
     } catch (error) {
-      console.error('❌ Fehler:', error);
       setErrorMsg('Produkt nicht gefunden. Versuche es erneut.');
       setIsLoading(false);
     }
@@ -66,7 +59,7 @@ export const ScannerView = ({ onTabChange }) => {
       id: Date.now().toString(),
       name: 'Neues Produkt',
       brand: 'Eigene Eingabe',
-      image: 'https://via.placeholder.com/200?text=Kein+Bild',
+      image: '',
       nutriScore: null,
       source: 'manual',
     };
@@ -100,7 +93,7 @@ export const ScannerView = ({ onTabChange }) => {
               onOff: true, // Zeigt einen An/Aus Button
               finder: true // Zeigt den grünen Rahmen
             }}
-            onError={(error) => console.log('Scanner Error:', error)} // Fehler leise loggen
+            onError={() => {}} // Fehler leise ignorieren
             styles={{
               container: { width: '100%', height: '100%' },
               video: { objectFit: 'cover' }

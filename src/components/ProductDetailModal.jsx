@@ -1,49 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { MessageSquareText, Star, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { MessageSquareText, X } from 'lucide-react';
 import { ProductArtwork } from './ProductArtwork';
+import { StarRating } from './StarRating';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
-
-const renderStars = (rating, size = 16) => (
-  <div className="flex gap-[2px]">
-    {[...Array(5)].map((_, index) => (
-      <Star
-        key={index}
-        size={size}
-        className={index < Math.round(rating || 0) ? 'fill-emerald-500 text-emerald-500' : 'text-slate-200'}
-        strokeWidth={1.7}
-      />
-    ))}
-  </div>
-);
-
-const formatTimeAgo = (timestamp) => {
-  const date = timestamp?.toDate?.() || (timestamp instanceof Date ? timestamp : null);
-
-  if (!date) {
-    return 'gerade eben';
-  }
-
-  const diffMs = Date.now() - date.getTime();
-  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
-
-  if (diffMinutes < 1) return 'gerade eben';
-  if (diffMinutes < 60) return `vor ${diffMinutes} Min.`;
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `vor ${diffHours} Std.`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  return `vor ${diffDays} Tag${diffDays === 1 ? '' : 'en'}`;
-};
-
-const getAvatarUrl = (review) => {
-  if (review.userAvatar) {
-    return review.userAvatar;
-  }
-
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(review.userName || 'Foodie')}&background=ecfdf5&color=065f46`;
-};
+import { formatTimeAgo, getAvatarUrl } from '../utils/formatters';
 
 export const ProductDetailModal = ({
   isOpen,
@@ -155,16 +116,10 @@ export const ProductDetailModal = ({
     });
   };
 
-  const averageRating = useMemo(() => {
-    if (reviewItems.length === 0) {
-      return 0;
-    }
-
-    const total = reviewItems.reduce((sum, review) => sum + (review.rating || 0), 0);
-    return total / reviewItems.length;
-  }, [reviewItems]);
-
-  const totalReviewCount = Math.max(product?.reviewCount || 0, reviewItems.length);
+  // Use the authoritative running average stored in Firestore, not a
+  // recalculation from the current (paginated) subset of reviews.
+  const averageRating = product?.averageRating || 0;
+  const totalReviewCount = product?.reviewCount || 0;
   const metaLine = [product?.brand, product?.store].filter(Boolean).join(' • ');
 
   if (!isOpen || !product) {
@@ -225,7 +180,7 @@ export const ProductDetailModal = ({
                       {totalReviewCount > 0 ? averageRating.toFixed(1) : 'Neu'}
                     </span>
                     <div>
-                      {renderStars(averageRating, 18)}
+                      <StarRating rating={averageRating} size={18} />
                       <p className="mt-1 text-xs font-medium text-slate-500">
                         {totalReviewCount > 0
                           ? `${totalReviewCount} Bewertung${totalReviewCount === 1 ? '' : 'en'}`
@@ -288,7 +243,7 @@ export const ProductDetailModal = ({
                           <p className="truncate text-sm font-bold text-slate-900">
                             {review.userName || 'Foodie'}
                           </p>
-                          <div className="mt-1">{renderStars(review.rating, 15)}</div>
+                          <div className="mt-1"><StarRating rating={review.rating} size={15} /></div>
                         </div>
                       </div>
 

@@ -1,48 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ProductDetailModal } from '../components/ProductDetailModal';
+import { StarRating } from '../components/StarRating';
 import { StoreFilterChips } from '../components/StoreFilterChips';
-import { Star } from 'lucide-react';
 import { useShop } from '../context/useShop';
-import { STORE_FILTERS, normalizeStoreName, storeMatchesFilter } from '../data';
-
-const formatTimeAgo = (timestamp) => {
-  const date = timestamp?.toDate?.() || (timestamp instanceof Date ? timestamp : null);
-
-  if (!date) return 'gerade eben';
-
-  const diffMs = Date.now() - date.getTime();
-  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
-
-  if (diffMinutes < 1) return 'gerade eben';
-  if (diffMinutes < 60) return `vor ${diffMinutes} Min.`;
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `vor ${diffHours} Std.`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  return `vor ${diffDays} Tag${diffDays === 1 ? '' : 'en'}`;
-};
-
-const getAvatarUrl = (review) => {
-  if (review.userAvatar) {
-    return review.userAvatar;
-  }
-
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(review.userName || 'Foodie')}&background=ecfdf5&color=065f46`;
-};
-
-const renderStars = (rating) => (
-  <div className="flex gap-[2px]">
-    {[...Array(5)].map((_, index) => (
-      <Star
-        key={index}
-        size={15}
-        className={index < Math.round(rating || 0) ? 'fill-emerald-500 text-emerald-500' : 'text-slate-200'}
-        strokeWidth={1.8}
-      />
-    ))}
-  </div>
-);
+import { STORE_FILTERS, normalizeStoreName } from '../data';
+import { formatTimeAgo, getAvatarUrl } from '../utils/formatters';
 
 export const FeedView = ({ onTabChange }) => {
   const { getFeedActivity } = useShop();
@@ -53,14 +15,8 @@ export const FeedView = ({ onTabChange }) => {
   const [detailProduct, setDetailProduct] = useState(null);
   const [activeStore, setActiveStore] = useState('Alle');
 
-  const filteredFeedItems = useMemo(() => feedItems.filter((review) => (
-    storeMatchesFilter(review.store, activeStore)
-  )), [activeStore, feedItems]);
-
   const openProductDetail = (review) => {
-    if (!review?.productId) {
-      return;
-    }
+    if (!review?.productId) return;
 
     setDetailProduct({
       id: review.productId,
@@ -74,38 +30,40 @@ export const FeedView = ({ onTabChange }) => {
     });
   };
 
-  useEffect(() => {
-    const loadInitialFeed = async () => {
-      setIsLoading(true);
+  // Reload from the top whenever the store filter changes
+  const loadFeed = useCallback(async (store) => {
+    setIsLoading(true);
+    setFeedItems([]);
+    setLastDoc(null);
+    setHasMore(true);
 
-      try {
-        const { reviews, lastVisibleDoc } = await getFeedActivity();
-        setFeedItems(reviews);
-        setLastDoc(lastVisibleDoc);
-        setHasMore(reviews.length === 15 && Boolean(lastVisibleDoc));
-      } catch (error) {
-        console.error('Fehler beim Laden des Community-Feeds:', error);
-        setFeedItems([]);
-        setLastDoc(null);
-        setHasMore(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadInitialFeed();
+    try {
+      const { reviews, lastVisibleDoc } = await getFeedActivity(null, store);
+      setFeedItems(reviews);
+      setLastDoc(lastVisibleDoc);
+      setHasMore(reviews.length === 15 && Boolean(lastVisibleDoc));
+    } catch (error) {
+      console.error('Fehler beim Laden des Community-Feeds:', error);
+      setFeedItems([]);
+      setLastDoc(null);
+      setHasMore(false);
+    } finally {
+      setIsLoading(false);
+    }
   }, [getFeedActivity]);
 
+  useEffect(() => {
+    loadFeed(activeStore);
+  }, [activeStore, loadFeed]);
+
   const handleLoadMore = async () => {
-    if (!lastDoc || isLoading) {
-      return;
-    }
+    if (!lastDoc || isLoading) return;
 
     setIsLoading(true);
 
     try {
-      const { reviews, lastVisibleDoc } = await getFeedActivity(lastDoc);
-      setFeedItems((prevItems) => [...prevItems, ...reviews]);
+      const { reviews, lastVisibleDoc } = await getFeedActivity(lastDoc, activeStore);
+      setFeedItems((prev) => [...prev, ...reviews]);
       setLastDoc(lastVisibleDoc);
       setHasMore(reviews.length === 15 && Boolean(lastVisibleDoc));
     } catch (error) {
@@ -114,6 +72,10 @@ export const FeedView = ({ onTabChange }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleStoreChange = (store) => {
+    setActiveStore(store);
   };
 
   return (
@@ -127,7 +89,7 @@ export const FeedView = ({ onTabChange }) => {
           <StoreFilterChips
             stores={STORE_FILTERS}
             activeStore={activeStore}
-            onChange={setActiveStore}
+            onChange={handleStoreChange}
             className="mt-4"
           />
         </div>
@@ -141,22 +103,15 @@ export const FeedView = ({ onTabChange }) => {
         ) : feedItems.length === 0 ? (
           <div className="rounded-squircle border border-slate-200/70 bg-white px-6 py-10 text-center shadow-sm">
             <p className="text-sm font-medium text-slate-500">
-              Noch ist es ruhig hier. Schnapp dir den Scanner und mach den Anfang! 🍔
-            </p>
-          </div>
-        ) : filteredFeedItems.length === 0 ? (
-          <div className="rounded-squircle border border-slate-200/70 bg-white px-6 py-10 text-center shadow-sm">
-            <p className="text-sm font-medium text-slate-500">
-              Im Feed gibt es aktuell keine Reviews von {activeStore}.
-            </p>
-            <p className="mt-2 text-xs text-slate-400">
-              Wechsle den Filter oder lade weitere Eintraege nach.
+              {activeStore === 'Alle'
+                ? 'Noch ist es ruhig hier. Schnapp dir den Scanner und mach den Anfang! 🍔'
+                : `Noch keine Reviews von ${activeStore}. Sei der Erste!`}
             </p>
           </div>
         ) : (
           <>
             <div className="space-y-4">
-              {filteredFeedItems.map((review) => (
+              {feedItems.map((review) => (
                 <button
                   key={review.id}
                   type="button"
@@ -191,7 +146,9 @@ export const FeedView = ({ onTabChange }) => {
                     </span>
                   </div>
 
-                  <div className="mb-3">{renderStars(review.rating)}</div>
+                  <div className="mb-3">
+                    <StarRating rating={review.rating} size={15} strokeWidth={1.8} />
+                  </div>
 
                   <p className="text-sm leading-relaxed text-slate-700">
                     {review.comment?.trim() || 'Kein Kommentar hinterlassen.'}
@@ -208,7 +165,7 @@ export const FeedView = ({ onTabChange }) => {
                   disabled={isLoading}
                   className="text-sm font-semibold text-realgreen transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isLoading ? 'Laedt...' : 'Weitere laden'}
+                  {isLoading ? 'Lädt...' : 'Weitere laden'}
                 </button>
               </div>
             )}
