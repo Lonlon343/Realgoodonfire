@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Flame, Loader2, ScanBarcode, ShieldCheck, Star, Trash2 } from 'lucide-react';
 import { DatenschutzModal } from '../components/DatenschutzModal';
+import { ProductDetailModal } from '../components/ProductDetailModal';
 import { StarRating } from '../components/StarRating';
 import { useAuth } from '../context/useAuth';
 import { useShop } from '../context/useShop';
@@ -12,6 +13,7 @@ export const ProfileView = () => {
   const [userReviews, setUserReviews] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDatenschutzOpen, setIsDatenschutzOpen] = useState(false);
+  const [detailProduct, setDetailProduct] = useState(null);
 
   useEffect(() => {
     if (!currentUser?.uid) {
@@ -150,9 +152,18 @@ export const ProfileView = () => {
           ) : (
             <div className="space-y-3">
               {recentReviews.map((review) => (
-                <div
+                <button
                   key={review.id}
-                  className="rounded-squircle bg-white px-4 py-4 shadow-sm border border-slate-100 flex items-center justify-between gap-4"
+                  type="button"
+                  onClick={() => setDetailProduct({
+                    id: review.productId,
+                    name: review.productName || 'Unbekanntes Produkt',
+                    brand: review.brand || '',
+                    image: review.image || '',
+                    category: review.category || '',
+                    price: review.price ?? null,
+                  })}
+                  className="w-full rounded-squircle bg-white px-4 py-4 shadow-sm border border-slate-100 flex items-center justify-between gap-4 text-left"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-slate-900">{review.productName}</p>
@@ -161,7 +172,7 @@ export const ProfileView = () => {
                   <div className="flex-shrink-0">
                     <StarRating rating={review.rating} size={14} strokeWidth={1.8} activeClass="fill-realorange text-realorange" />
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -189,6 +200,12 @@ export const ProfileView = () => {
         </section>
 
       </div>
+
+      <ProductDetailModal
+        isOpen={Boolean(detailProduct)}
+        product={detailProduct}
+        onClose={() => setDetailProduct(null)}
+      />
 
       <DatenschutzModal
         isOpen={isDatenschutzOpen}
