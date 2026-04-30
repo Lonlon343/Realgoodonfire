@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
+import { DatenschutzModal } from './DatenschutzModal';
 
 export const LoginModal = () => {
   const {
@@ -18,12 +19,15 @@ export const LoginModal = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [datenschutzAccepted, setDatenschutzAccepted] = useState(false);
+  const [isDatenschutzOpen, setIsDatenschutzOpen] = useState(false);
 
   const resetForm = useCallback(() => {
     setName('');
     setEmail('');
     setPassword('');
     setIsSubmitting(false);
+    setDatenschutzAccepted(false);
     clearAuthError();
   }, [clearAuthError]);
 
@@ -155,9 +159,31 @@ export const LoginModal = () => {
             />
           </div>
 
+          {isRegistering && (
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={datenschutzAccepted}
+                onChange={(e) => setDatenschutzAccepted(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-realgreen cursor-pointer"
+              />
+              <span className="text-sm text-slate-600 leading-relaxed">
+                Ich habe die{' '}
+                <button
+                  type="button"
+                  onClick={() => setIsDatenschutzOpen(true)}
+                  className="font-semibold text-realgreen underline underline-offset-2 hover:brightness-90"
+                >
+                  Datenschutzerklärung
+                </button>{' '}
+                gelesen und stimme ihr zu.
+              </span>
+            </label>
+          )}
+
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || (isRegistering && !datenschutzAccepted)}
             className="w-full rounded-squircle bg-realgreen px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? 'Bitte warten...' : isRegistering ? 'Registrieren' : 'Einloggen'}
@@ -195,6 +221,8 @@ export const LoginModal = () => {
           {isRegistering ? 'Bereits Foodie? Einloggen' : 'Noch kein Konto? Registrieren'}
         </button>
       </div>
+
+      <DatenschutzModal isOpen={isDatenschutzOpen} onClose={() => setIsDatenschutzOpen(false)} />
     </div>
   );
 };

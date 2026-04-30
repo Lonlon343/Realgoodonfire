@@ -25,7 +25,7 @@ export const ScannerView = ({ onTabChange }) => {
           setCurrentProduct(product);
           setTimeout(() => onTabChange('rate'), 300);
         }
-      } catch (error) {
+      } catch {
         setErrorMsg(`Produkt ${code} nicht gefunden.`);
         setIsLoading(false);
       }
@@ -48,7 +48,7 @@ export const ScannerView = ({ onTabChange }) => {
         setManualCode('');
         setTimeout(() => onTabChange('rate'), 300);
       }
-    } catch (error) {
+    } catch {
       setErrorMsg('Produkt nicht gefunden. Versuche es erneut.');
       setIsLoading(false);
     }
@@ -126,7 +126,7 @@ export const ScannerView = ({ onTabChange }) => {
             <button 
               type="submit"
               disabled={isLoading || !manualCode.trim()}
-              className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 text-white font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 text-white font-bold py-3 px-6 rounded-xl transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
               {isLoading ? '...' : 'Go'}
             </button>

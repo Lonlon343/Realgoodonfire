@@ -537,7 +537,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
 
                 <div className="absolute inset-x-0 bottom-0 p-5 flex flex-col justify-end">
                   <div className="bg-emerald-500/80 backdrop-blur-md text-white/95 text-[10px] font-bold px-3 py-1 rounded-full self-start mb-2.5 uppercase tracking-widest border border-emerald-400/50">
-                    TRENDET GERADE
+                    AKTUELL IM TREND
                   </div>
                   <h4 className="text-white text-[22px] font-bold leading-tight mb-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
                     {product.name}
@@ -604,7 +604,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
       {/* Dupe Alarm Section */}
       <div className="px-5 mb-10 animate-slide-up-delay-3">
         <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2 mb-4" style={{ fontFamily: 'Poppins, sans-serif' }}>
-          Dupe Alarm 🕵️
+          Dupe Alarm
         </h3>
 
         {isLoadingHome ? renderDupeSkeletons() : topDupes.length > 0 ? (
