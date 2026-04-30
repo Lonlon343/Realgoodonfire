@@ -112,26 +112,27 @@ export async function getHypeProducts(categoryFilter = null, lastVisibleDoc = nu
     return getStoreFilteredHypeProducts(categoryFilter, lastVisibleDoc, normalizedStoreFilter);
   }
 
-  const productsRef = collection(db, 'products');
-  const constraints = [];
+  // Fetch all products sorted by reviewCount, then filter client-side.
+  // Client-side category filtering handles old products that were saved before
+  // the category field existed, so no products are silently excluded.
+  const snapshot = await getDocs(query(
+    collection(db, 'products'),
+    orderBy('reviewCount', 'desc')
+  ));
 
-  if (categoryFilter) {
-    constraints.push(where('category', '==', categoryFilter));
-  }
-  constraints.push(orderBy('reviewCount', 'desc'));
-  constraints.push(limit(HYPE_PAGE_SIZE));
+  const allProducts = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const filtered = categoryFilter
+    ? allProducts.filter((p) => p.category === categoryFilter)
+    : allProducts;
 
-  if (lastVisibleDoc) {
-    constraints.push(startAfter(lastVisibleDoc));
-  }
+  const offset = typeof lastVisibleDoc === 'number' ? lastVisibleDoc : 0;
+  const docs = filtered.slice(offset, offset + HYPE_PAGE_SIZE);
+  const nextOffset = offset + docs.length;
 
-  const q = query(productsRef, ...constraints);
-  const snapshot = await getDocs(q);
-
-  const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
-
-  return { docs, lastDoc };
+  return {
+    docs,
+    lastDoc: nextOffset < filtered.length ? nextOffset : null,
+  };
 }
 
 export async function getNewestProducts() {
