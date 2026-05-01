@@ -32,7 +32,7 @@ export const DesktopLandingView = () => {
                 />
               </div>
               <p className="text-sm text-slate-500 max-w-[140px] leading-snug">
-                Oder scanne den Code mit dem Handy.
+                Scanne den Code mit dem Handy und probiere es aus!
               </p>
             </div>
           </div>
