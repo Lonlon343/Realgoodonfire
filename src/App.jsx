@@ -3,6 +3,7 @@ import './App.css';
 import { AuthProvider } from './context/AuthContext';
 import { ShopProvider } from './context/ShopContext';
 import { LoginModal } from './components/LoginModal';
+import { MobileGate } from './components/MobileGate';
 import { Navbar } from './components/layout/Navbar';
 import { HomeView } from './views/HomeView';
 import { HypeView } from './views/HypeView';
@@ -40,15 +41,17 @@ function App() {
   };
 
   return (
-    <AuthProvider>
-      <ShopProvider>
-        <div className="min-h-screen bg-slate-50 pb-24">
-          {renderView()}
-        </div>
-        <Navbar activeTab={activeTab} onTabChange={setActiveTab} />
-        <LoginModal />
-      </ShopProvider>
-    </AuthProvider>
+    <MobileGate>
+      <AuthProvider>
+        <ShopProvider>
+          <div className="min-h-screen bg-slate-50 pb-24">
+            {renderView()}
+          </div>
+          <Navbar activeTab={activeTab} onTabChange={setActiveTab} />
+          <LoginModal />
+        </ShopProvider>
+      </AuthProvider>
+    </MobileGate>
   );
 }
 
