@@ -154,5 +154,37 @@ service cloud.firestore {
       allow update: if isValidDupeVoteUpdate();
       allow delete: if false;
     }
+
+    function isValidReportReason(value) {
+      return value == 'spam'
+        || value == 'harassment'
+        || value == 'inappropriate'
+        || value == 'other';
+    }
+
+    function isValidReportDetails(value) {
+      return value == null || (value is string && value.size() <= 500);
+    }
+
+    match /reports/{reportId} {
+      // Reports are only readable/writable from the backend (Admin SDK).
+      // Clients may create a report for themselves but never read or modify them.
+      allow read, update, delete: if false;
+      allow create: if isSignedIn()
+        && request.resource.data.reporterUserId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'reviewId',
+          'reporterUserId',
+          'reason',
+          'details',
+          'status',
+          'createdAt'
+        ])
+        && request.resource.data.reviewId is string
+        && request.resource.data.reviewId.size() > 0
+        && isValidReportReason(request.resource.data.reason)
+        && isValidReportDetails(request.resource.data.details)
+        && request.resource.data.status == 'pending';
+    }
   }
 }
