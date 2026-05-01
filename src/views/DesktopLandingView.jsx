@@ -13,12 +13,12 @@ export const DesktopLandingView = () => {
           <h1 className="text-6xl font-bold leading-[1.05] tracking-tight">
             Finde die besten<br />
             <span className="bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-700 bg-clip-text text-transparent">
-              Supermarkt-Alternativen.
+              Supermarkt-Alternativen
             </span>
           </h1>
 
           <p className="mt-6 text-lg text-slate-600 max-w-md">
-            Scanne, bewerte und entdecke ehrliche Produkt-Empfehlungen aus der Community — direkt im Regal.
+            Scanne, bewerte und entdecke ehrliche Produkt-Empfehlungen aus der Community
           </p>
 
           <div className="mt-10 flex items-center gap-6">
