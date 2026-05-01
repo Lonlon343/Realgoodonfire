@@ -87,7 +87,7 @@ export const DatenschutzModal = ({ isOpen, onClose }) => {
         <section>
           <h2 className="text-base font-bold text-slate-900 mb-3">7. Deine Rechte</h2>
           <div className="rounded-squircle bg-white border border-slate-100 shadow-sm px-4 py-4 text-sm text-slate-600 leading-relaxed">
-            Du hast jederzeit das Recht auf unentgeltliche Auskunft über deine gespeicherten personenbezogenen Daten, deren Herkunft und Empfänger und den Zweck der Datenverarbeitung sowie ein Recht auf Berichtigung, Sperrung oder Löschung dieser Daten. Wenn du deinen Account und alle damit verbundenen Daten (Bewertungen etc.) löschen möchtest, kannst du dies jederzeit über eine E-Mail an uns beantragen.
+            Du hast jederzeit das Recht auf unentgeltliche Auskunft über deine gespeicherten personenbezogenen Daten, deren Herkunft und Empfänger und den Zweck der Datenverarbeitung sowie ein Recht auf Berichtigung, Sperrung oder Löschung dieser Daten. Wenn du deinen Account und alle damit verbundenen Daten (Bewertungen etc.) löschen möchtest, kannst du dies jederzeit über eine E-Mail an uns beantragen. RealGood übernimmt keine Haftung für die Richtigkeit der Zutaten oder Allergiehinweise. Bitte überprüfe vor dem Verzehr immer die offizielle Verpackung.
           </div>
         </section>
 

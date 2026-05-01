@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { MessageSquareText, X } from 'lucide-react';
+import { Flag, MessageSquareText, X } from 'lucide-react';
 import { ProductArtwork } from './ProductArtwork';
+import { ReportModal } from './ReportModal';
 import { StarRating } from './StarRating';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
@@ -13,13 +14,35 @@ export const ProductDetailModal = ({
   onWriteReview,
 }) => {
   const { getProductReviews, setCurrentProduct } = useShop();
-  const { requireAuth } = useAuth();
+  const { requireAuth, currentUser } = useAuth();
   const [reviewItems, setReviewItems] = useState([]);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [reportingReviewId, setReportingReviewId] = useState(null);
+  const [hiddenReviewIds, setHiddenReviewIds] = useState([]);
+  const [reportToast, setReportToast] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) {
+      setHiddenReviewIds([]);
+      setReportingReviewId(null);
+      setReportToast('');
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!reportToast) return undefined;
+    const timeoutId = window.setTimeout(() => setReportToast(''), 3500);
+    return () => window.clearTimeout(timeoutId);
+  }, [reportToast]);
+
+  const handleReported = (reviewId) => {
+    setHiddenReviewIds((prev) => (prev.includes(reviewId) ? prev : [...prev, reviewId]));
+    setReportToast('Danke für deine Meldung. Wir prüfen das.');
+  };
 
   useEffect(() => {
     if (!isOpen) {
@@ -219,7 +242,7 @@ export const ProductDetailModal = ({
               <div className="flex justify-center py-14">
                 <div className="h-9 w-9 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
               </div>
-            ) : reviewItems.length === 0 ? (
+            ) : reviewItems.filter((r) => !hiddenReviewIds.includes(r.id)).length === 0 ? (
               <div className="rounded-squircle border border-slate-200/80 bg-white px-6 py-10 text-center shadow-sm">
                 <p className="text-sm font-medium text-slate-500">
                   Noch hat niemand dieses Produkt probiert. Sei der Erste und sag der Community, ob es sich lohnt!
@@ -227,12 +250,12 @@ export const ProductDetailModal = ({
               </div>
             ) : (
               <div className="space-y-4">
-                {reviewItems.map((review) => (
+                {reviewItems.filter((r) => !hiddenReviewIds.includes(r.id)).map((review) => (
                   <article
                     key={review.id}
-                    className="rounded-squircle border border-slate-100/80 bg-white p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)]"
+                    className="relative rounded-squircle border border-slate-100/80 bg-white p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)]"
                   >
-                    <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="mb-3 flex items-center justify-between gap-3 pr-8">
                       <div className="flex min-w-0 items-center gap-3">
                         <img
                           src={getAvatarUrl(review)}
@@ -255,6 +278,17 @@ export const ProductDetailModal = ({
                     <p className="text-sm leading-relaxed text-slate-700">
                       {review.comment?.trim() || 'Kein Kommentar hinterlassen.'}
                     </p>
+
+                    {currentUser ? (
+                      <button
+                        type="button"
+                        onClick={() => setReportingReviewId(review.id)}
+                        className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500"
+                        aria-label="Bewertung melden"
+                      >
+                        <Flag size={15} strokeWidth={2} />
+                      </button>
+                    ) : null}
                   </article>
                 ))}
 
@@ -274,6 +308,21 @@ export const ProductDetailModal = ({
             )}
           </div>
         </div>
+
+        <ReportModal
+          isOpen={Boolean(reportingReviewId)}
+          reviewId={reportingReviewId}
+          onClose={() => setReportingReviewId(null)}
+          onReported={handleReported}
+        />
+
+        {reportToast ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-6 z-20 flex justify-center px-5">
+            <div className="pointer-events-auto rounded-full bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-lg">
+              {reportToast}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

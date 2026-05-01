@@ -591,6 +591,34 @@ export const ShopProvider = ({ children }) => {
     return createdDupe;
   }, [currentUser, resolveProductPrice]);
 
+  const reportReview = useCallback(async (reviewId, reporterUserId, reason, additionalText = '') => {
+    if (!reviewId) {
+      throw new Error('Review-ID fehlt.');
+    }
+
+    if (!reporterUserId) {
+      throw new Error('Du musst eingeloggt sein, um eine Meldung zu senden.');
+    }
+
+    if (!reason) {
+      throw new Error('Bitte wähle einen Meldegrund aus.');
+    }
+
+    const trimmedDetails = typeof additionalText === 'string' ? additionalText.trim() : '';
+
+    const reportPayload = {
+      reviewId,
+      reporterUserId,
+      reason,
+      details: trimmedDetails || null,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    };
+
+    const reportRef = await addDoc(collection(db, 'reports'), reportPayload);
+    return reportRef.id;
+  }, []);
+
   const voteOnDupe = useCallback(async (dupeId, type) => {
     if (!currentUser?.uid) {
       throw new Error('Du musst eingeloggt sein, um auf einen Dupe zu voten.');
@@ -684,6 +712,7 @@ export const ShopProvider = ({ children }) => {
     loadHomeData,
     createDupeLink,
     voteOnDupe,
+    reportReview,
     currentProduct,
     trendingProducts,
     newestProducts,
