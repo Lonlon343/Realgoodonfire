@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { useShop } from '../context/useShop';
-import { Plus } from 'lucide-react';
 
 export const ScannerView = ({ onTabChange }) => {
   const { fetchProductByBarcode, setCurrentProduct } = useShop();
@@ -52,20 +51,6 @@ export const ScannerView = ({ onTabChange }) => {
       setErrorMsg('Produkt nicht gefunden. Versuche es erneut.');
       setIsLoading(false);
     }
-  };
-
-  const handleCreateManual = () => {
-    const emptyProduct = {
-      id: Date.now().toString(),
-      name: 'Neues Produkt',
-      brand: 'Eigene Eingabe',
-      image: '',
-      nutriScore: null,
-      source: 'manual',
-    };
-    
-    setCurrentProduct(emptyProduct);
-    onTabChange('rate');
   };
 
   return (
@@ -132,15 +117,6 @@ export const ScannerView = ({ onTabChange }) => {
             </button>
           </div>
         </form>
-
-        {/* Create Manual Product */}
-        <button
-          onClick={handleCreateManual}
-          className="w-full px-4 py-3 bg-white hover:bg-slate-50 border-2 border-slate-200 text-slate-700 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
-        >
-          <Plus size={20} />
-          Neues Produkt erstellen
-        </button>
 
         {/* Info */}
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs text-slate-600 space-y-2">
