@@ -6,10 +6,10 @@ import { useShop } from '../context/useShop';
 import { STORE_FILTERS } from '../data';
 
 const CATEGORIES = [
-  { name: 'Snacks',   Icon: Popcorn,   accent: 'from-amber-500 to-orange-600' },
-  { name: 'Getränke', Icon: CupSoda,   accent: 'from-sky-500 to-blue-600' },
-  { name: 'Kühlware', Icon: Snowflake, accent: 'from-cyan-600 to-teal-700' },
-  { name: 'Vorrat',   Icon: Archive,   accent: 'from-stone-500 to-stone-700' },
+  { name: 'Snacks',   Icon: Popcorn,   accent: 'from-amber-400 to-orange-500' },
+  { name: 'Getränke', Icon: CupSoda,   accent: 'from-sky-400 to-blue-500' },
+  { name: 'Kühlware', Icon: Snowflake, accent: 'from-cyan-400 to-teal-500' },
+  { name: 'Vorrat',   Icon: Archive,   accent: 'from-stone-400 to-stone-600' },
 ];
 
 export const HypeView = () => {
@@ -81,7 +81,7 @@ export const HypeView = () => {
           className={`col-span-1 row-span-2 rounded-squircle bg-gradient-to-br ${featured.accent} relative overflow-hidden flex flex-col justify-end p-4 transition-all duration-300 shadow-lg
             ${activeCategory === featured.name ? `${activeRing} scale-[0.97]` : 'hover:scale-[0.98]'}`}
         >
-          <featured.Icon size={52} strokeWidth={1.5} className="mb-2 text-white drop-shadow-lg" />
+          <featured.Icon size={52} strokeWidth={1.5} className="mb-2 text-emerald-600 drop-shadow-lg" />
           <span className="text-white font-bold text-lg tracking-tight drop-shadow">{featured.name}</span>
           {activeCategory === featured.name && (
             <div className="absolute top-3 right-3 bg-white/30 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center">
@@ -96,7 +96,7 @@ export const HypeView = () => {
           className={`col-span-2 row-span-1 rounded-squircle bg-gradient-to-br ${wide.accent} relative overflow-hidden flex items-center gap-3 px-4 transition-all duration-300 shadow-md
             ${activeCategory === wide.name ? `${activeRing} scale-[0.97]` : 'hover:scale-[0.98]'}`}
         >
-          <wide.Icon size={38} strokeWidth={1.5} className="text-white drop-shadow-lg" />
+          <wide.Icon size={38} strokeWidth={1.5} className="text-emerald-600 drop-shadow-lg" />
           <span className="text-white font-bold text-base tracking-tight drop-shadow">{wide.name}</span>
           {activeCategory === wide.name && (
             <div className="absolute top-2 right-2 bg-white/30 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center">
@@ -113,7 +113,7 @@ export const HypeView = () => {
             className={`col-span-1 row-span-1 rounded-squircle bg-gradient-to-br ${cat.accent} relative overflow-hidden flex flex-col items-center justify-center p-2 transition-all duration-300 shadow-md
               ${activeCategory === cat.name ? `${activeRing} scale-[0.95]` : 'hover:scale-[0.97]'}`}
           >
-            <cat.Icon size={26} strokeWidth={1.5} className="mb-1 text-white drop-shadow" />
+            <cat.Icon size={26} strokeWidth={1.5} className="mb-1 text-emerald-600 drop-shadow" />
             <span className="text-white font-semibold text-[11px] tracking-tight leading-tight text-center drop-shadow">{cat.name}</span>
             {activeCategory === cat.name && (
               <div className="absolute top-1.5 right-1.5 bg-white/30 backdrop-blur-sm rounded-full w-5 h-5 flex items-center justify-center">
