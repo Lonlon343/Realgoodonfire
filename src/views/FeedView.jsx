@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Flag } from 'lucide-react';
+import { Flag, MessageSquare } from 'lucide-react';
 import { ProductDetailModal } from '../components/ProductDetailModal';
 import { ReportModal } from '../components/ReportModal';
 import { StarRating } from '../components/StarRating';
@@ -103,7 +103,7 @@ export const FeedView = ({ onTabChange }) => {
       <div className="sticky top-0 z-20 border-b border-slate-200/70 bg-[#FDFDFD]/85 backdrop-blur-md">
         <div className="px-5 py-4">
           <h1 className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
-            Community Feed 💬
+            Community Feed <MessageSquare size={20} className="inline-block align-middle ml-1 text-realgreen" strokeWidth={1.8} />
           </h1>
 
           <StoreFilterChips

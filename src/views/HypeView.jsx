@@ -6,10 +6,10 @@ import { useShop } from '../context/useShop';
 import { STORE_FILTERS } from '../data';
 
 const CATEGORIES = [
-  { name: 'Snacks',   Icon: Popcorn,   accent: 'from-amber-400 to-orange-500' },
-  { name: 'Getränke', Icon: CupSoda,   accent: 'from-sky-400 to-blue-500' },
-  { name: 'Kühlware', Icon: Snowflake, accent: 'from-cyan-400 to-teal-500' },
-  { name: 'Vorrat',   Icon: Archive,   accent: 'from-stone-400 to-stone-600' },
+  { name: 'Snacks',   Icon: Popcorn,   accent: 'from-amber-500 to-orange-600' },
+  { name: 'Getränke', Icon: CupSoda,   accent: 'from-sky-500 to-blue-600' },
+  { name: 'Kühlware', Icon: Snowflake, accent: 'from-cyan-600 to-teal-700' },
+  { name: 'Vorrat',   Icon: Archive,   accent: 'from-stone-500 to-stone-700' },
 ];
 
 export const HypeView = () => {

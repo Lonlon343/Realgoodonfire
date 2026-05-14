@@ -1,6 +1,7 @@
 // FILE: src/views/ScannerView.jsx
 import { useState } from 'react';
 import { Scanner } from '@yudiel/react-qr-scanner';
+import { Check, Lightbulb, ScanBarcode, XCircle } from 'lucide-react';
 import { useShop } from '../context/useShop';
 
 export const ScannerView = ({ onTabChange }) => {
@@ -57,7 +58,7 @@ export const ScannerView = ({ onTabChange }) => {
     <div className="h-full flex flex-col bg-slate-50 text-slate-900 pb-24">
       {/* Header */}
       <div className="px-4 py-6 border-b border-slate-200">
-        <h2 className="text-2xl font-bold text-center text-emerald-600">📷 Barcode Scanner</h2>
+        <h2 className="text-2xl font-bold text-center text-emerald-600 flex items-center justify-center gap-2"><ScanBarcode size={26} strokeWidth={2} /> Barcode Scanner</h2>
         <p className="text-center text-slate-500 text-sm mt-2">Halte einen Barcode vor die Kamera</p>
       </div>
 
@@ -92,7 +93,7 @@ export const ScannerView = ({ onTabChange }) => {
         {/* Error Message */}
         {errorMsg && (
           <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-center text-sm font-medium">
-            ❌ {errorMsg}
+            <XCircle size={16} className="inline-block mr-1 align-text-bottom" /> {errorMsg}
           </div>
         )}
 
@@ -120,11 +121,11 @@ export const ScannerView = ({ onTabChange }) => {
 
         {/* Info */}
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs text-slate-600 space-y-2">
-          <p className="font-bold text-slate-800">💡 Tipps:</p>
+          <p className="font-bold text-slate-800 flex items-center gap-1"><Lightbulb size={14} className="text-amber-500" /> Tipps:</p>
           <ul className="space-y-1">
-            <li>✓ Gute Beleuchtung ist wichtig</li>
-            <li>✓ Barcode sollte deutlich zu sehen sein</li>
-            <li>✓ Scanner funktioniert mit EAN-13 & EAN-8</li>
+            <li className="flex items-center gap-1"><Check size={12} className="text-emerald-500 flex-shrink-0" /> Gute Beleuchtung ist wichtig</li>
+            <li className="flex items-center gap-1"><Check size={12} className="text-emerald-500 flex-shrink-0" /> Barcode sollte deutlich zu sehen sein</li>
+            <li className="flex items-center gap-1"><Check size={12} className="text-emerald-500 flex-shrink-0" /> Scanner funktioniert mit EAN-13 & EAN-8</li>
           </ul>
         </div>
       </div>
