@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Flame, ChevronRight, Loader2 } from 'lucide-react';
+import { Archive, ChevronRight, CupSoda, Flame, Loader2, PackageOpen, Popcorn, Snowflake } from 'lucide-react';
 import { ProductArtwork } from '../components/ProductArtwork';
 import { StoreFilterChips } from '../components/StoreFilterChips';
 import { useShop } from '../context/useShop';
 import { STORE_FILTERS } from '../data';
 
 const CATEGORIES = [
-  { name: 'Snacks', emoji: '🍿', accent: 'from-amber-400 to-orange-500' },
-  { name: 'Getränke', emoji: '🥤', accent: 'from-sky-400 to-blue-500' },
-  { name: 'Kühlware', emoji: '🧊', accent: 'from-cyan-400 to-teal-500' },
-  { name: 'Vorrat', emoji: '🫙', accent: 'from-stone-400 to-stone-600' },
+  { name: 'Snacks',   Icon: Popcorn,   accent: 'from-amber-400 to-orange-500' },
+  { name: 'Getränke', Icon: CupSoda,   accent: 'from-sky-400 to-blue-500' },
+  { name: 'Kühlware', Icon: Snowflake, accent: 'from-cyan-400 to-teal-500' },
+  { name: 'Vorrat',   Icon: Archive,   accent: 'from-stone-400 to-stone-600' },
 ];
 
 export const HypeView = () => {
@@ -81,7 +81,7 @@ export const HypeView = () => {
           className={`col-span-1 row-span-2 rounded-squircle bg-gradient-to-br ${featured.accent} relative overflow-hidden flex flex-col justify-end p-4 transition-all duration-300 shadow-lg
             ${activeCategory === featured.name ? `${activeRing} scale-[0.97]` : 'hover:scale-[0.98]'}`}
         >
-          <span className="text-5xl mb-2 drop-shadow-lg">{featured.emoji}</span>
+          <featured.Icon size={52} strokeWidth={1.5} className="mb-2 text-white drop-shadow-lg" />
           <span className="text-white font-bold text-lg tracking-tight drop-shadow">{featured.name}</span>
           {activeCategory === featured.name && (
             <div className="absolute top-3 right-3 bg-white/30 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center">
@@ -96,7 +96,7 @@ export const HypeView = () => {
           className={`col-span-2 row-span-1 rounded-squircle bg-gradient-to-br ${wide.accent} relative overflow-hidden flex items-center gap-3 px-4 transition-all duration-300 shadow-md
             ${activeCategory === wide.name ? `${activeRing} scale-[0.97]` : 'hover:scale-[0.98]'}`}
         >
-          <span className="text-4xl drop-shadow-lg">{wide.emoji}</span>
+          <wide.Icon size={38} strokeWidth={1.5} className="text-white drop-shadow-lg" />
           <span className="text-white font-bold text-base tracking-tight drop-shadow">{wide.name}</span>
           {activeCategory === wide.name && (
             <div className="absolute top-2 right-2 bg-white/30 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center">
@@ -113,7 +113,7 @@ export const HypeView = () => {
             className={`col-span-1 row-span-1 rounded-squircle bg-gradient-to-br ${cat.accent} relative overflow-hidden flex flex-col items-center justify-center p-2 transition-all duration-300 shadow-md
               ${activeCategory === cat.name ? `${activeRing} scale-[0.95]` : 'hover:scale-[0.97]'}`}
           >
-            <span className="text-2xl mb-1">{cat.emoji}</span>
+            <cat.Icon size={26} strokeWidth={1.5} className="mb-1 text-white drop-shadow" />
             <span className="text-white font-semibold text-[11px] tracking-tight leading-tight text-center drop-shadow">{cat.name}</span>
             {activeCategory === cat.name && (
               <div className="absolute top-1.5 right-1.5 bg-white/30 backdrop-blur-sm rounded-full w-5 h-5 flex items-center justify-center">
@@ -224,7 +224,7 @@ export const HypeView = () => {
 
         {!isLoading && hypeProducts.length === 0 && (
           <div className="text-center py-16">
-            <span className="text-4xl mb-3 block">📭</span>
+            <PackageOpen size={44} strokeWidth={1.3} className="mx-auto mb-3 text-slate-300" />
             <p className="text-slate-400 text-sm font-medium">
               Keine Hype-Produkte fuer diese Filter gefunden.
             </p>

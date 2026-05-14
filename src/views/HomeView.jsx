@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Flame, ArrowRightLeft, Search, Star, ThumbsDown, ThumbsUp, User, X } from 'lucide-react';
+import { Flame, ArrowRightLeft, Hamburger, Search, Star, ThumbsDown, ThumbsUp, User, X } from 'lucide-react';
 import { ProductDetailModal } from '../components/ProductDetailModal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ProductArtwork } from '../components/ProductArtwork';
@@ -390,7 +390,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
         </div>
 
         <h2 className="text-2xl font-bold text-slate-900 leading-tight mb-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
-          Moin, {user ? user.displayName?.split(' ')[0] : 'Foodie'}! <span className="inline-block animate-pulse-gentle">🍔</span>
+          Moin, {user ? user.displayName?.split(' ')[0] : 'Foodie'}! <Hamburger size={26} className="inline-block align-middle animate-pulse-gentle text-realorange" strokeWidth={1.8} />
         </h2>
         <p className="text-slate-500 text-sm mb-6 font-medium">
           Entdecke die besten Snacks in deiner Stadt.

@@ -1,5 +1,5 @@
 
-import { Home, Flame, MessagesSquare, User, ScanBarcode } from 'lucide-react';
+import { Home, Flame, Users, User, ScanBarcode } from 'lucide-react';
 
 export const Navbar = ({ activeTab, onTabChange }) => {
   const leftTabs = [
@@ -7,7 +7,7 @@ export const Navbar = ({ activeTab, onTabChange }) => {
     { id: 'hype', label: 'Hype', icon: Flame },
   ];
   const rightTabs = [
-    { id: 'community', label: 'Feed', icon: MessagesSquare },
+    { id: 'community', label: 'Feed', icon: Users },
     { id: 'profile', label: 'Profile', icon: User },
   ];
 

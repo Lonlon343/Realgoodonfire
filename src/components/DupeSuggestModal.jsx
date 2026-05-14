@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeftRight, Search, X } from 'lucide-react';
+import { ArrowLeftRight, Binoculars, Search, X } from 'lucide-react';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
 import { DupeSuccessModal } from './DupeSuccessModal';
@@ -240,7 +240,7 @@ export const DupeSuggestModal = ({
         </button>
 
         <div className="mb-6 pr-10">
-          <span className="mb-3 block text-4xl">🕵️</span>
+          <Binoculars size={38} strokeWidth={1.5} className="mb-3 text-realgreen" />
           <h2 className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
             Welches Originalprodukt wird hier kopiert?
           </h2>

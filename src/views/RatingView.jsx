@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Star, ArrowLeft, Send } from 'lucide-react';
+import { Star, ArrowLeft, Binoculars, Send } from 'lucide-react';
 import { ProductArtwork } from '../components/ProductArtwork';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
@@ -177,7 +177,7 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
           onClick={() => requireAuth(() => setIsDupeModalOpen(true))}
           className="mt-5 inline-flex items-center gap-2 rounded-squircle border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-realgreen transition-all hover:border-emerald-300 hover:bg-emerald-100/80"
         >
-          <span className="text-base leading-none">🕵️</span>
+          <Binoculars size={16} strokeWidth={1.8} />
           Dupe vorschlagen
         </button>
       </div>
