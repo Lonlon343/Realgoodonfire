@@ -546,7 +546,7 @@ export const ShopProvider = ({ children }) => {
     const priceSavingsPercentage = Number.isFinite(rawSavingsPercentage)
       ? Math.round(rawSavingsPercentage * 10) / 10
       : 0;
-    const initialMatchScore = calculateInitialDupeMatchScore(priceSavingsPercentage);
+    const initialMatchScore = calculateDupeMatchScore(priceSavingsPercentage, { up: 1, down: 0 });
 
     const dupePayload = {
       originalId: originalProduct.id,
