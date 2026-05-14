@@ -299,8 +299,7 @@ export const ShopProvider = ({ children }) => {
     const userReviewsQuery = query(
       collection(db, 'reviews'),
       where('userId', '==', userId),
-      orderBy('createdAt', 'desc'),
-      limit(50)
+      orderBy('createdAt', 'desc')
     );
 
     const snapshot = await getDocs(userReviewsQuery);

@@ -357,7 +357,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
     <div className="pb-32 bg-[#FDFDFD] font-sans antialiased min-h-screen">
 
       {/* Header Area */}
-      <div className="px-5 pt-8 animate-slide-up">
+      <div className="relative z-10 px-5 pt-8 animate-slide-up">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
             <img src="/RealGoodLogo.svg" alt="" aria-hidden="true" className="h-20 w-20" />
