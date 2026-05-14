@@ -125,7 +125,6 @@ export const ScannerView = ({ onTabChange }) => {
             <li>✓ Gute Beleuchtung ist wichtig</li>
             <li>✓ Barcode sollte deutlich zu sehen sein</li>
             <li>✓ Scanner funktioniert mit EAN-13 & EAN-8</li>
-            <li>✓ Manuelle Eingabe als Fallback</li>
           </ul>
         </div>
       </div>

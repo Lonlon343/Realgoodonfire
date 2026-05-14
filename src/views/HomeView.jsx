@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Flame, ArrowRightLeft, Search, ThumbsDown, ThumbsUp, User, X } from 'lucide-react';
+import { Flame, ArrowRightLeft, Search, Star, ThumbsDown, ThumbsUp, User, X } from 'lucide-react';
 import { ProductDetailModal } from '../components/ProductDetailModal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ProductArtwork } from '../components/ProductArtwork';
@@ -443,7 +443,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
                         name={product.name}
                         brand={product.brand}
                         category={product.category}
-                        variant="thumb"
+                        variant="compact"
                         className="h-full w-full"
                         imageClassName="h-full w-full object-cover"
                       />

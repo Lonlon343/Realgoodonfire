@@ -159,10 +159,12 @@ export const ShopProvider = ({ children }) => {
     }
 
     const endTerm = term + '\uf8ff';
+    const rawTerm = searchTerm.trim();
+    const rawEndTerm = rawTerm + '\uf8ff';
 
-    // Run parallel prefix-range queries on nameLower and brandLower.
-    // These use Firestore's single-field auto-indexes — no composite index needed.
-    const [nameSnapshot, brandSnapshot] = await Promise.all([
+    // Four parallel prefix-range queries: lowercase fields (new products) +
+    // original-case fields (legacy products that predate the nameLower migration).
+    const [nameSnapshot, brandSnapshot, nameCaseSnapshot, brandCaseSnapshot] = await Promise.all([
       getDocs(query(
         collection(db, 'products'),
         where('nameLower', '>=', term),
@@ -175,13 +177,25 @@ export const ShopProvider = ({ children }) => {
         where('brandLower', '<=', endTerm),
         limit(12)
       )),
+      getDocs(query(
+        collection(db, 'products'),
+        where('name', '>=', rawTerm),
+        where('name', '<=', rawEndTerm),
+        limit(12)
+      )),
+      getDocs(query(
+        collection(db, 'products'),
+        where('brand', '>=', rawTerm),
+        where('brand', '<=', rawEndTerm),
+        limit(12)
+      )),
     ]);
 
     // Merge and deduplicate by document id
     const seen = new Set();
     const results = [];
 
-    for (const snapshot of [nameSnapshot, brandSnapshot]) {
+    for (const snapshot of [nameSnapshot, brandSnapshot, nameCaseSnapshot, brandCaseSnapshot]) {
       for (const docSnapshot of snapshot.docs) {
         if (!seen.has(docSnapshot.id)) {
           seen.add(docSnapshot.id);
@@ -193,8 +207,8 @@ export const ShopProvider = ({ children }) => {
     // Sort: name-prefix matches first, then by review count
     return results
       .sort((a, b) => {
-        const aName = (a.nameLower || '').startsWith(term) ? 1 : 0;
-        const bName = (b.nameLower || '').startsWith(term) ? 1 : 0;
+        const aName = (a.nameLower || a.name || '').toLowerCase().startsWith(term) ? 1 : 0;
+        const bName = (b.nameLower || b.name || '').toLowerCase().startsWith(term) ? 1 : 0;
         if (aName !== bName) return bName - aName;
         return (b.reviewCount || 0) - (a.reviewCount || 0);
       })
