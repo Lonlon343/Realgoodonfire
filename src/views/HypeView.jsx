@@ -10,7 +10,6 @@ const CATEGORIES = [
   { name: 'Getränke', emoji: '🥤', accent: 'from-sky-400 to-blue-500' },
   { name: 'Kühlware', emoji: '🧊', accent: 'from-cyan-400 to-teal-500' },
   { name: 'Vorrat', emoji: '🫙', accent: 'from-stone-400 to-stone-600' },
-  { name: 'Vegan', emoji: '🌱', accent: 'from-emerald-400 to-green-600' },
 ];
 
 export const HypeView = () => {
@@ -67,16 +66,20 @@ export const HypeView = () => {
 
   // ── Bento Grid Category Tiles ──
   const renderBentoGrid = () => {
-    const featured = CATEGORIES[0]; // Snacks = large tile
-    const rest = CATEGORIES.slice(1);
+    const [featured, wide, ...small] = CATEGORIES;
+    // featured: tall left column (col-span-1 row-span-2)
+    // wide:     top-right spanning 2 cols (col-span-2 row-span-1)
+    // small:    bottom-right, 1 col each — fills 3×2 grid perfectly
+
+    const activeRing = 'ring-3 ring-realgreen ring-offset-2';
 
     return (
-      <div className="grid grid-cols-4 grid-rows-2 gap-3 px-5 mb-8">
-        {/* Large featured tile — spans 2 cols & 2 rows */}
+      <div className="grid grid-cols-3 grid-rows-2 gap-3 px-5 mb-8">
+        {/* Tall featured tile — left column, both rows */}
         <button
           onClick={() => handleCategoryClick(featured.name)}
-          className={`col-span-2 row-span-2 rounded-squircle bg-gradient-to-br ${featured.accent} relative overflow-hidden flex flex-col justify-end p-4 transition-all duration-300 shadow-lg
-            ${activeCategory === featured.name ? 'ring-3 ring-realgreen ring-offset-2 scale-[0.97]' : 'hover:scale-[0.98]'}`}
+          className={`col-span-1 row-span-2 rounded-squircle bg-gradient-to-br ${featured.accent} relative overflow-hidden flex flex-col justify-end p-4 transition-all duration-300 shadow-lg
+            ${activeCategory === featured.name ? `${activeRing} scale-[0.97]` : 'hover:scale-[0.98]'}`}
         >
           <span className="text-5xl mb-2 drop-shadow-lg">{featured.emoji}</span>
           <span className="text-white font-bold text-lg tracking-tight drop-shadow">{featured.name}</span>
@@ -87,16 +90,36 @@ export const HypeView = () => {
           )}
         </button>
 
-        {/* Four compact tiles */}
-        {rest.map((cat) => (
+        {/* Wide tile — top right, spans 2 cols */}
+        <button
+          onClick={() => handleCategoryClick(wide.name)}
+          className={`col-span-2 row-span-1 rounded-squircle bg-gradient-to-br ${wide.accent} relative overflow-hidden flex items-center gap-3 px-4 transition-all duration-300 shadow-md
+            ${activeCategory === wide.name ? `${activeRing} scale-[0.97]` : 'hover:scale-[0.98]'}`}
+        >
+          <span className="text-4xl drop-shadow-lg">{wide.emoji}</span>
+          <span className="text-white font-bold text-base tracking-tight drop-shadow">{wide.name}</span>
+          {activeCategory === wide.name && (
+            <div className="absolute top-2 right-2 bg-white/30 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center">
+              <Flame size={14} className="text-white" />
+            </div>
+          )}
+        </button>
+
+        {/* Two compact tiles — bottom right */}
+        {small.map((cat) => (
           <button
             key={cat.name}
             onClick={() => handleCategoryClick(cat.name)}
             className={`col-span-1 row-span-1 rounded-squircle bg-gradient-to-br ${cat.accent} relative overflow-hidden flex flex-col items-center justify-center p-2 transition-all duration-300 shadow-md
-              ${activeCategory === cat.name ? 'ring-3 ring-realgreen ring-offset-2 scale-[0.95]' : 'hover:scale-[0.97]'}`}
+              ${activeCategory === cat.name ? `${activeRing} scale-[0.95]` : 'hover:scale-[0.97]'}`}
           >
             <span className="text-2xl mb-1">{cat.emoji}</span>
             <span className="text-white font-semibold text-[11px] tracking-tight leading-tight text-center drop-shadow">{cat.name}</span>
+            {activeCategory === cat.name && (
+              <div className="absolute top-1.5 right-1.5 bg-white/30 backdrop-blur-sm rounded-full w-5 h-5 flex items-center justify-center">
+                <Flame size={11} className="text-white" />
+              </div>
+            )}
           </button>
         ))}
       </div>

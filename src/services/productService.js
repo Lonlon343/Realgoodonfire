@@ -7,7 +7,6 @@ import {
   limit,
   orderBy,
   query,
-  startAfter,
   where,
 } from 'firebase/firestore';
 import { getStoreQueryValues, normalizeStoreName } from '../data';
@@ -92,7 +91,6 @@ export function mapCategory(offTags = []) {
 
   const matchers = [
     { category: 'Getränke', keywords: ['beverage', 'drink', 'water', 'juice', 'soda', 'coffee', 'tea', 'getränke', 'boisson'] },
-    { category: 'Vegan', keywords: ['vegan', 'plant-based', 'pflanzlich'] },
     { category: 'Snacks', keywords: ['snack', 'chip', 'cracker', 'cookie', 'sweet', 'candy', 'chocolate', 'biscuit', 'süßware', 'confiserie'] },
     { category: 'Kühlware', keywords: ['dairy', 'milk', 'milch', 'cheese', 'käse', 'yogurt', 'joghurt', 'fresh', 'refrigerat', 'kühl', 'meat', 'fleisch', 'wurst'] },
   ];
