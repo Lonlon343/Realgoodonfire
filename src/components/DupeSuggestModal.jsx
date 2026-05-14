@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowRight, Search, X } from 'lucide-react';
+import { ArrowLeftRight, Search, X } from 'lucide-react';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
 import { DupeSuccessModal } from './DupeSuccessModal';
@@ -38,6 +38,7 @@ export const DupeSuggestModal = ({
   const [missingOriginalPrice, setMissingOriginalPrice] = useState('');
   const [missingOriginalPriceError, setMissingOriginalPriceError] = useState('');
   const [submittedDupe, setSubmittedDupe] = useState(null);
+  const [swapped, setSwapped] = useState(false);
 
   const resetState = useCallback(() => {
     setQuery('');
@@ -49,6 +50,7 @@ export const DupeSuggestModal = ({
     setMissingOriginalPrice('');
     setMissingOriginalPriceError('');
     setSubmittedDupe(null);
+    setSwapped(false);
   }, []);
 
   useEffect(() => {
@@ -100,16 +102,31 @@ export const DupeSuggestModal = ({
   useEffect(() => {
     setMissingOriginalPrice('');
     setMissingOriginalPriceError('');
-  }, [selectedOriginal?.id]);
+  }, [selectedOriginal?.id, swapped]);
 
   if (!isOpen || !dupeProduct) {
     return null;
   }
 
-  const selectedOriginalHasPrice = isDisplayablePrice(selectedOriginal?.price);
-  const effectiveOriginalPrice = selectedOriginalHasPrice
-    ? parsePriceValue(selectedOriginal?.price)
+  // Role assignment: "original" is the expensive product, "dupeForLink" is the cheaper one.
+  // By default the scanned product is the dupe; swapping reverses the roles.
+  const originalInRole = swapped ? dupeProduct : selectedOriginal;
+  const dupeInRole = swapped ? selectedOriginal : dupeProduct;
+
+  const originalHasPrice = isDisplayablePrice(originalInRole?.price);
+  const effectiveOriginalPrice = originalHasPrice
+    ? parsePriceValue(originalInRole?.price)
     : parsePriceValue(missingOriginalPrice);
+
+  const effectiveDupePrice = parsePriceValue(dupeInRole?.price);
+
+  const savingsPercent =
+    effectiveOriginalPrice > 0 && effectiveDupePrice > 0 && effectiveOriginalPrice > effectiveDupePrice
+      ? Math.round(((effectiveOriginalPrice - effectiveDupePrice) / effectiveOriginalPrice) * 100)
+      : null;
+
+  const dupeIsExpensive =
+    effectiveOriginalPrice > 0 && effectiveDupePrice > 0 && effectiveDupePrice > effectiveOriginalPrice;
 
   const handleClose = () => {
     if (isSubmitting) {
@@ -129,7 +146,7 @@ export const DupeSuggestModal = ({
       return;
     }
 
-    if (!selectedOriginalHasPrice) {
+    if (!originalHasPrice) {
       const originalPriceValidation = validateRealisticPrice(missingOriginalPrice, { allowEmpty: false });
 
       if (!originalPriceValidation.isValid) {
@@ -143,12 +160,12 @@ export const DupeSuggestModal = ({
 
     try {
       const originalProductForLink = {
-        ...selectedOriginal,
-        price: selectedOriginalHasPrice
-          ? parsePriceValue(selectedOriginal.price)
+        ...originalInRole,
+        price: originalHasPrice
+          ? parsePriceValue(originalInRole.price)
           : parsePriceValue(missingOriginalPrice),
       };
-      const createdDupe = await createDupeLink(originalProductForLink, dupeProduct);
+      const createdDupe = await createDupeLink(originalProductForLink, dupeInRole);
       setSubmittedDupe(createdDupe);
       onSuccess?.(createdDupe);
     } catch (submitError) {
@@ -228,7 +245,7 @@ export const DupeSuggestModal = ({
             Welches Originalprodukt wird hier kopiert?
           </h2>
           <p className="mt-2 text-sm text-slate-500">
-            Suche das Original, bestätige die Verknüpfung und wir legen den Dupe-Link direkt an.
+            Ein <strong className="text-slate-700">Dupe</strong> ist eine günstigere Alternative, die genauso gut schmeckt wie das teurere Original – der echte Community-Geheimtipp. Das gescannte Produkt ist standardmäßig der günstige Dupe. Suche das teurere Original darunter.
           </p>
         </div>
 
@@ -302,64 +319,96 @@ export const DupeSuggestModal = ({
             </div>
           </>
         ) : (
-          <div className="space-y-5">
-            <div className="rounded-squircle border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="mb-4 text-sm font-semibold text-slate-500">Du verknüpfst:</p>
+          <div className="space-y-4">
+            {/* Product comparison card */}
+            <div className="rounded-squircle border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Dupe-Verknüpfung
+              </p>
 
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                {/* Dupe side */}
                 <div className="flex w-[42%] flex-col items-center text-center">
-                  <div className="mb-3 flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.5rem] bg-[#F5F2EF] p-3">
+                  <div className="mb-2 flex h-20 w-20 items-center justify-center overflow-hidden rounded-[1.4rem] bg-[#F5F2EF] p-2.5">
                     <ProductArtwork
-                      src={dupeProduct.image}
-                      alt={dupeProduct.name}
-                      name={dupeProduct.name}
-                      brand={dupeProduct.brand}
-                      category={dupeProduct.category}
+                      src={dupeInRole.image}
+                      alt={dupeInRole.name}
+                      name={dupeInRole.name}
+                      brand={dupeInRole.brand}
+                      category={dupeInRole.category}
                       variant="card"
                       className="h-full w-full"
                       imageClassName="h-full w-full object-contain"
                     />
                   </div>
-                  <span className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-700">
-                    DUPE
+                  <span className="mb-1 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                    Dupe
                   </span>
-                  <p className="line-clamp-2 text-sm font-semibold text-slate-900">{dupeProduct.name}</p>
-                  <p className="mt-1 text-xs text-slate-500">{formatPriceDisplay(dupeProduct.price)}</p>
+                  <p className="line-clamp-2 text-xs font-semibold text-slate-900">{dupeInRole.name}</p>
+                  <p className="mt-0.5 text-[11px] font-medium text-emerald-700">
+                    {formatPriceDisplay(dupeInRole.price)}
+                  </p>
                 </div>
 
-                <div className="flex flex-col items-center gap-2 text-emerald-500">
-                  <ArrowRight size={22} strokeWidth={2.5} />
-                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">
-                    LINK
-                  </span>
+                {/* Swap button + savings in the middle */}
+                <div className="flex flex-1 flex-col items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSwapped((prev) => !prev)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-600 active:scale-95"
+                    aria-label="Produkte tauschen"
+                    title="Rollen tauschen"
+                  >
+                    <ArrowLeftRight size={16} strokeWidth={2} />
+                  </button>
+
+                  {savingsPercent !== null && (
+                    <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[9px] font-black text-white shadow-sm">
+                      {savingsPercent}% günstiger
+                    </span>
+                  )}
+
+                  {dupeIsExpensive && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-semibold text-amber-700">
+                      Rollen tauschen?
+                    </span>
+                  )}
                 </div>
 
+                {/* Original side */}
                 <div className="flex w-[42%] flex-col items-center text-center">
-                  <div className="mb-3 flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.5rem] bg-[#F5F2EF] p-3">
+                  <div className="mb-2 flex h-20 w-20 items-center justify-center overflow-hidden rounded-[1.4rem] bg-[#F5F2EF] p-2.5">
                     <ProductArtwork
-                      src={selectedOriginal.image}
-                      alt={selectedOriginal.name}
-                      name={selectedOriginal.name}
-                      brand={selectedOriginal.brand}
-                      category={selectedOriginal.category}
+                      src={originalInRole.image}
+                      alt={originalInRole.name}
+                      name={originalInRole.name}
+                      brand={originalInRole.brand}
+                      category={originalInRole.category}
                       variant="card"
                       className="h-full w-full"
                       imageClassName="h-full w-full object-contain"
                     />
                   </div>
-                  <span className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                    ORIGINAL
+                  <span className="mb-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">
+                    Original
                   </span>
-                  <p className="line-clamp-2 text-sm font-semibold text-slate-900">{selectedOriginal.name}</p>
-                  <p className="mt-1 text-xs text-slate-500">{formatPriceDisplay(effectiveOriginalPrice)}</p>
+                  <p className="line-clamp-2 text-xs font-semibold text-slate-900">{originalInRole.name}</p>
+                  <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+                    {formatPriceDisplay(effectiveOriginalPrice)}
+                  </p>
                 </div>
               </div>
+
+              <p className="mt-3 text-center text-[11px] text-slate-400">
+                Tippe auf <ArrowLeftRight size={10} className="inline" /> um die Rollen zu tauschen
+              </p>
             </div>
 
-            {!selectedOriginalHasPrice && (
+            {/* Missing original price input */}
+            {!originalHasPrice && (
               <div className="rounded-squircle border border-amber-200 bg-amber-50 px-4 py-3.5">
                 <label className="block text-sm font-semibold text-amber-900" htmlFor="missing-original-price">
-                  Preis für das Originalprodukt fehlt. Bitte nachtragen (ca.):
+                  Preis für das Original fehlt – bitte nachtragen (ca.):
                 </label>
                 <div className="mt-3 flex items-center gap-2">
                   <span className="text-sm font-bold text-amber-900">€</span>
