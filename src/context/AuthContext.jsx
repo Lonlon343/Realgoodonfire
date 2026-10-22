@@ -99,6 +99,9 @@ export const AuthProvider = ({ children }) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
       await updateProfile(userCredential.user, { displayName: trimmedName });
+      // Force a token refresh so the ID token carries the new displayName as `name` claim.
+      // Firestore rules compare review.userName against that claim.
+      await userCredential.user.getIdToken(true);
       setCurrentUser(auth.currentUser ?? userCredential.user);
       setIsLoginModalOpen(false);
       return true;
