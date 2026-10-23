@@ -3,6 +3,7 @@ import { createContext, useState, useEffect, useCallback } from 'react';
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  signInAnonymously,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -54,8 +55,20 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      if (user) {
+      if (!user) {
+        // Every client gets an anonymous session so Firestore rules can require
+        // request.auth for all writes (e.g. the barcode scanner saving products).
+        // The anonymous user is NOT treated as logged in anywhere in the UI.
+        setCurrentUser(null);
+        signInAnonymously(auth).catch((error) => {
+          console.error('Anonyme Anmeldung fehlgeschlagen:', error);
+          setAuthLoading(false);
+        });
+        return;
+      }
+
+      setCurrentUser(user.isAnonymous ? null : user);
+      if (!user.isAnonymous) {
         setAuthError(null);
       }
       setAuthLoading(false);
