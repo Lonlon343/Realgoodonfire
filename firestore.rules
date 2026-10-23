@@ -6,6 +6,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // A real account is any signed-in user that is not the anonymous session every
+    // client receives on startup. Only real accounts may create content.
+    function isRealAccount() {
+      return isSignedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
     function isVoteChoice(value) {
       return value == 'up' || value == 'down';
     }
@@ -168,12 +174,6 @@ service cloud.firestore {
           request.resource.data.votes,
           request.resource.data.matchScore
         );
-    }
-
-    // A real account is any signed-in user that is not the anonymous session every
-    // client receives on startup. Only real accounts may create content.
-    function isRealAccount() {
-      return isSignedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
     function hasOnlyProductKeys() {
