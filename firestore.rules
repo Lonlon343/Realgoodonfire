@@ -33,12 +33,77 @@ service cloud.firestore {
       );
     }
 
+    function isNonEmptyString(value, maxSize) {
+      return value is string && value.size() > 0 && value.size() <= maxSize;
+    }
+
+    function isBoundedString(value, maxSize) {
+      return value is string && value.size() <= maxSize;
+    }
+
+    function isOptionalBoundedString(value, maxSize) {
+      return value == null || isBoundedString(value, maxSize);
+    }
+
+    // The savings percentage must be derived from the two stored prices (client rounds
+    // to one decimal), or be exactly 0 when a price comparison is not possible.
+    function expectedSavingsPercentage(originalPrice, dupePrice) {
+      return ((originalPrice - dupePrice) / originalPrice) * 100;
+    }
+
+    function savingsPercentageIsValid(originalPrice, dupePrice, priceSavingsPercentage) {
+      return priceSavingsPercentage is number && (
+        (
+          originalPrice is number
+          && dupePrice is number
+          && math.abs(priceSavingsPercentage - expectedSavingsPercentage(originalPrice, dupePrice)) <= 0.1
+        ) || (
+          (originalPrice == null || dupePrice == null)
+          && priceSavingsPercentage == 0
+        )
+      );
+    }
+
     function isValidDupeCreate() {
       return isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'originalId',
+          'originalName',
+          'originalBrand',
+          'originalCategory',
+          'originalImage',
+          'originalPrice',
+          'dupeId',
+          'dupeName',
+          'dupeBrand',
+          'dupeCategory',
+          'dupeImage',
+          'dupePrice',
+          'createdBy',
+          'matchScore',
+          'priceSavingsPercentage',
+          'votes',
+          'userVotes',
+          'createdAt'
+        ])
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.originalId is string
-        && request.resource.data.dupeId is string
-        && request.resource.data.priceSavingsPercentage is number
+        && isNonEmptyString(request.resource.data.originalId, 64)
+        && isNonEmptyString(request.resource.data.dupeId, 64)
+        && request.resource.data.originalId != request.resource.data.dupeId
+        && isBoundedString(request.resource.data.originalName, 200)
+        && isBoundedString(request.resource.data.originalBrand, 120)
+        && isBoundedString(request.resource.data.originalCategory, 60)
+        && isBoundedString(request.resource.data.originalImage, 2048)
+        && isBoundedString(request.resource.data.dupeName, 200)
+        && isBoundedString(request.resource.data.dupeBrand, 120)
+        && isBoundedString(request.resource.data.dupeCategory, 60)
+        && isBoundedString(request.resource.data.dupeImage, 2048)
+        && request.resource.data.createdAt == request.time
+        && savingsPercentageIsValid(
+          request.resource.data.originalPrice,
+          request.resource.data.dupePrice,
+          request.resource.data.priceSavingsPercentage
+        )
         && request.resource.data.votes is map
         && request.resource.data.votes.keys().hasOnly(['up', 'down'])
         && request.resource.data.votes.up == 1
@@ -128,6 +193,25 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid
+        // Display identity must match the signed-in user's ID token, so a review can
+        // never be posted under another user's name or avatar.
+        && request.resource.data.userName == request.auth.token.get('name', 'Foodie')
+        && (
+          request.resource.data.userAvatar == null
+          || request.resource.data.userAvatar == request.auth.token.get('picture', null)
+        )
+        && isNonEmptyString(request.resource.data.productId, 64)
+        && isBoundedString(request.resource.data.productName, 200)
+        && isBoundedString(request.resource.data.brand, 120)
+        && isBoundedString(request.resource.data.image, 2048)
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && isBoundedString(request.resource.data.comment, 500)
+        && isOptionalBoundedString(request.resource.data.store, 40)
+        && request.resource.data.isDupe is bool
+        && isOptionalBoundedString(request.resource.data.dupeTarget, 200)
+        && request.resource.data.createdAt == request.time
         && request.resource.data.keys().hasOnly([
           'productId',
           'productName',
