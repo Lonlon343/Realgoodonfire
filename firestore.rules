@@ -65,7 +65,7 @@ service cloud.firestore {
     }
 
     function isValidDupeCreate() {
-      return isSignedIn()
+      return isRealAccount()
         && request.resource.data.keys().hasOnly([
           'originalId',
           'originalName',
@@ -156,7 +156,7 @@ service cloud.firestore {
     }
 
     function isValidDupeVoteUpdate() {
-      return isSignedIn()
+      return isRealAccount()
         && resource.data.votes is map
         && request.resource.data.votes is map
         && request.resource.data.votes.keys().hasOnly(['up', 'down'])
@@ -170,9 +170,14 @@ service cloud.firestore {
         );
     }
 
-    match /products/{productId} {
-      allow read: if true;
-      allow create, update: if request.resource.data.keys().hasOnly([
+    // A real account is any signed-in user that is not the anonymous session every
+    // client receives on startup. Only real accounts may create content.
+    function isRealAccount() {
+      return isSignedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function hasOnlyProductKeys() {
+      return request.resource.data.keys().hasOnly([
         'name',
         'brand',
         'image',
@@ -184,14 +189,71 @@ service cloud.firestore {
         'averageRating',
         'nameLower',
         'brandLower'
+      ]);
+    }
+
+    // Descriptive fields written by the barcode scanner (OpenFoodFacts import).
+    function productDescriptiveFieldsAreValid(data) {
+      return isNonEmptyString(data.name, 200)
+        && isBoundedString(data.brand, 120)
+        && isBoundedString(data.image, 2048)
+        && (data.nutriScore == null || isBoundedString(data.nutriScore, 20))
+        && isBoundedString(data.category, 40)
+        && isBoundedString(data.nameLower, 200)
+        && isBoundedString(data.brandLower, 120);
+    }
+
+    function productAffectedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // Scanner re-import: may refresh descriptive fields only, never counters or price.
+    function isProductScanUpdate() {
+      return productAffectedKeys().hasOnly([
+        'name', 'brand', 'image', 'nutriScore', 'category', 'nameLower', 'brandLower'
       ])
-      && isValidOptionalPrice(request.resource.data.get('price', null));
+      && productDescriptiveFieldsAreValid(request.resource.data);
+    }
+
+    // addReview transaction: exactly one more review, average stays within 1..5 range.
+    function isProductReviewStatsUpdate() {
+      return productAffectedKeys().hasOnly(['reviewCount', 'averageRating', 'price'])
+        && request.resource.data.reviewCount is int
+        && request.resource.data.reviewCount == resource.data.get('reviewCount', 0) + 1
+        && request.resource.data.averageRating is number
+        && request.resource.data.averageRating >= 0
+        && request.resource.data.averageRating <= 5
+        && isValidOptionalPrice(request.resource.data.get('price', null));
+    }
+
+    // createDupeLink: stores a price learned from the dupe form.
+    function isProductPriceUpdate() {
+      return productAffectedKeys().hasOnly(['price'])
+        && isValidOptionalPrice(request.resource.data.get('price', null));
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      // First import of a product (scanner, anonymous session allowed).
+      allow create: if isSignedIn()
+        && hasOnlyProductKeys()
+        && productDescriptiveFieldsAreValid(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.reviewCount == 0
+        && request.resource.data.averageRating == 0
+        && isValidOptionalPrice(request.resource.data.get('price', null));
+      allow update: if isSignedIn()
+        && hasOnlyProductKeys()
+        && (
+          isProductScanUpdate()
+          || (isRealAccount() && (isProductReviewStatsUpdate() || isProductPriceUpdate()))
+        );
       allow delete: if false;
     }
 
     match /reviews/{reviewId} {
       allow read: if true;
-      allow create: if isSignedIn()
+      allow create: if isRealAccount()
         && request.resource.data.userId == request.auth.uid
         // Display identity must match the signed-in user's ID token, so a review can
         // never be posted under another user's name or avatar.
@@ -254,7 +316,7 @@ service cloud.firestore {
       // Reports are only readable/writable from the backend (Admin SDK).
       // Clients may create a report for themselves but never read or modify them.
       allow read, update, delete: if false;
-      allow create: if isSignedIn()
+      allow create: if isRealAccount()
         && request.resource.data.reporterUserId == request.auth.uid
         && request.resource.data.keys().hasOnly([
           'reviewId',
