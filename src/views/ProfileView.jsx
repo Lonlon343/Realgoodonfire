@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Flame, Loader2, ScanBarcode, ShieldCheck, Star, Trash2 } from 'lucide-react';
+import { Flame, Loader2, LogOut, RefreshCw, ShieldCheck, Star, Trash2 } from 'lucide-react';
+import { Avatar } from '../components/Avatar';
 import { DatenschutzModal } from '../components/DatenschutzModal';
 import { ProductDetailModal } from '../components/ProductDetailModal';
 import { StarRating } from '../components/StarRating';
@@ -7,17 +8,21 @@ import { useAuth } from '../context/useAuth';
 import { useShop } from '../context/useShop';
 
 export const ProfileView = () => {
-  const { currentUser, setIsLoginModalOpen, clearAuthError } = useAuth();
+  const { currentUser, authLoading, logout, setIsLoginModalOpen, clearAuthError } = useAuth();
   const { getUserReviews } = useShop();
 
   const [userReviews, setUserReviews] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDatenschutzOpen, setIsDatenschutzOpen] = useState(false);
   const [detailProduct, setDetailProduct] = useState(null);
 
   useEffect(() => {
     if (!currentUser?.uid) {
       setUserReviews([]);
+      setLoadError('');
       return;
     }
 
@@ -25,12 +30,16 @@ export const ProfileView = () => {
 
     const load = async () => {
       setIsLoading(true);
+      setLoadError('');
       try {
         const reviews = await getUserReviews(currentUser.uid);
         if (isActive) setUserReviews(reviews);
       } catch (error) {
         console.error('Fehler beim Laden der Profil-Reviews:', error);
-        if (isActive) setUserReviews([]);
+        if (isActive) {
+          setUserReviews([]);
+          setLoadError('Deine Bewertungen konnten nicht geladen werden. Prüfe deine Verbindung.');
+        }
       } finally {
         if (isActive) setIsLoading(false);
       }
@@ -39,7 +48,7 @@ export const ProfileView = () => {
     load();
 
     return () => { isActive = false; };
-  }, [currentUser?.uid, getUserReviews]);
+  }, [currentUser?.uid, getUserReviews, reloadKey]);
 
   const reviewCount = userReviews.length;
   const hypeCount = userReviews.filter((r) => r.rating >= 4).length;
@@ -48,6 +57,24 @@ export const ProfileView = () => {
   const handleDelete = () => {
     window.alert('Konto-Löschung ist aktuell noch nicht verfügbar. Bitte kontaktiere uns direkt.');
   };
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-realbg px-5 py-10 pb-32 flex items-center justify-center" role="status" aria-label="Profil wird geladen">
+        <Loader2 size={32} className="animate-spin text-realgreen" />
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return (
@@ -58,7 +85,7 @@ export const ProfileView = () => {
             RealGood
           </h1>
           <p className="text-slate-700 font-semibold mb-2">Logge dich ein, um dein Foodie-Profil zu sehen</p>
-          <p className="text-sm text-slate-400 mb-6">Speichere Bewertungen, verfolge deine Hypes und baue deine Foodie-History auf.</p>
+          <p className="text-sm text-slate-400 mb-6">Speichere Bewertungen, verfolge deine Hypes und baue deinen Foodie-Verlauf auf.</p>
           <button
             type="button"
             onClick={() => {
@@ -81,22 +108,35 @@ export const ProfileView = () => {
         {/* Avatar + Name */}
         <div className="text-center mb-8 animate-slide-up">
           <div className="mx-auto mb-4 h-28 w-28 overflow-hidden rounded-squircle border border-emerald-100 bg-white p-1 shadow-xl shadow-emerald-100/30">
-            <img
-              src={currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'User')}&background=10B981&color=fff`}
-              alt={currentUser.displayName || 'Profilbild'}
-              className="h-full w-full rounded-[1.2rem] object-cover"
+            <Avatar
+              name={currentUser.displayName}
+              src={currentUser.photoURL}
+              className="h-full w-full rounded-[1.2rem]"
+              textClassName="text-3xl"
             />
           </div>
           <h1 className="text-3xl font-black text-realgreen tracking-tight" style={{ fontFamily: 'Poppins, sans-serif' }}>
-            {currentUser.displayName || 'Foodie User'}
+            {currentUser.displayName?.trim() || 'Foodie'}
           </h1>
-          <p className="mt-2 text-sm font-medium text-slate-400">Foodie Member</p>
+          <p className="mt-2 text-sm font-medium text-slate-400">Foodie-Mitglied</p>
         </div>
 
         {/* Stats grid */}
         {isLoading ? (
           <div className="flex justify-center py-10 mb-8">
             <Loader2 size={28} className="animate-spin text-realgreen" />
+          </div>
+        ) : loadError ? (
+          <div className="mb-8 rounded-squircle border border-red-100 bg-white px-5 py-8 text-center shadow-sm" role="alert">
+            <p className="text-sm font-medium text-red-600">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => setReloadKey((key) => key + 1)}
+              className="mt-4 inline-flex items-center gap-2 rounded-squircle border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-realgreen transition-all hover:border-emerald-300 hover:bg-emerald-100/80"
+            >
+              <RefreshCw size={15} strokeWidth={2} />
+              Nochmal versuchen
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-2 auto-rows-[118px] gap-4 mb-8 animate-slide-up-delay-1">
@@ -116,22 +156,16 @@ export const ProfileView = () => {
               </div>
             </div>
 
-            {/* Hypes tile */}
-            <div className="rounded-squircle bg-white p-4 shadow-sm border border-slate-100 flex flex-col justify-between">
+            {/* Hypes tile — reviews with 4 or 5 stars */}
+            <div className="row-span-2 rounded-squircle bg-white p-5 shadow-sm border border-slate-100 flex flex-col justify-between">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-slate-500">Hypes</span>
                 <Flame size={18} className="text-realorange" />
               </div>
-              <p className="text-3xl font-black text-slate-900 tracking-tight">{hypeCount}</p>
-            </div>
-
-            {/* Scans tile — equals review count since each review = 1 scan */}
-            <div className="rounded-squircle bg-white p-4 shadow-sm border border-slate-100 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-slate-500">Scans</span>
-                <ScanBarcode size={18} className="text-realgreen" />
+              <div>
+                <p className="text-4xl font-black text-slate-900 tracking-tight">{hypeCount}</p>
+                <p className="mt-2 text-sm text-slate-400">Bewertungen mit 4 oder 5 Sternen.</p>
               </div>
-              <p className="text-3xl font-black text-slate-900 tracking-tight">{reviewCount}</p>
             </div>
           </div>
         )}
@@ -142,10 +176,10 @@ export const ProfileView = () => {
             <h2 className="text-xl font-bold text-slate-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
               Zuletzt bewertet
             </h2>
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">History</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">Verlauf</span>
           </div>
 
-          {isLoading ? null : recentReviews.length === 0 ? (
+          {isLoading || loadError ? null : recentReviews.length === 0 ? (
             <div className="rounded-squircle border border-slate-200/70 bg-white px-5 py-8 text-center text-sm text-slate-400 shadow-sm">
               Noch keine Bewertungen. Scanne dein erstes Produkt! 🛒
             </div>
@@ -187,6 +221,16 @@ export const ProfileView = () => {
           >
             <ShieldCheck size={16} className="text-slate-400" />
             <span>Datenschutz &amp; Impressum</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="mt-2 w-full flex items-center gap-3 rounded-squircle px-4 py-3 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LogOut size={16} className="text-slate-500" />
+            <span>{isLoggingOut ? 'Abmelden …' : 'Abmelden'}</span>
           </button>
 
           <button

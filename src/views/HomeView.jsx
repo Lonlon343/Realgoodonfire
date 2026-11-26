@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Flame, ArrowRightLeft, Hamburger, Search, Star, ThumbsDown, ThumbsUp, User, X } from 'lucide-react';
+import { Avatar } from '../components/Avatar';
 import { ProductDetailModal } from '../components/ProductDetailModal';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ProductArtwork } from '../components/ProductArtwork';
@@ -7,7 +8,7 @@ import { StarRating } from '../components/StarRating';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
 import { formatPriceDisplay, isDisplayablePrice } from '../utils/pricing';
-import { formatTimeAgo, getAvatarUrl } from '../utils/formatters';
+import { formatTimeAgo } from '../utils/formatters';
 
 export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailConsumed }) => {
   const {
@@ -21,7 +22,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
     voteOnDupe,
     searchProducts,
   } = useShop();
-  const { currentUser: user, logout, setIsLoginModalOpen, clearAuthError, requireAuth } = useAuth();
+  const { currentUser: user, authLoading, logout, setIsLoginModalOpen, clearAuthError, requireAuth } = useAuth();
   const [votingState, setVotingState] = useState({});
   const [voteErrors, setVoteErrors] = useState({});
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -63,20 +64,24 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
       return;
     }
 
+    // Set to false once a newer query is typed, so an older answer is dropped.
+    let isCurrentQuery = true;
+
     setIsSearching(true);
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const results = await searchProducts(trimmed);
-        setSearchResults(results);
+        if (isCurrentQuery) setSearchResults(results);
       } catch (error) {
         console.error('Suchfehler:', error);
-        setSearchResults([]);
+        if (isCurrentQuery) setSearchResults([]);
       } finally {
-        setIsSearching(false);
+        if (isCurrentQuery) setIsSearching(false);
       }
     }, 300);
 
     return () => {
+      isCurrentQuery = false;
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
@@ -138,7 +143,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
     }
 
     return trimmedComment.length > 60
-      ? `${trimmedComment.slice(0, 60).trim()}...`
+      ? `${trimmedComment.slice(0, 60).trim()} …`
       : trimmedComment;
   };
 
@@ -183,7 +188,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
         showVoteError(
           dupeId,
           isPermissionError
-            ? 'Vote nicht möglich — bitte versuche es gleich erneut.'
+            ? 'Bitte melde dich an, um abzustimmen.'
             : 'Dein Vote konnte nicht gespeichert werden.'
         );
       } finally {
@@ -348,6 +353,8 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
     setShowLogoutModal(true);
   };
 
+  const greetingName = user?.displayName?.trim().split(/\s+/)[0] || 'Foodie';
+
   const handleWriteReviewFromDetail = () => {
     setDetailProduct(null);
     onTabChange('rate');
@@ -360,12 +367,14 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
       <div className="relative z-10 px-5 pt-8 animate-slide-up">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
-            <img src="/RealGoodLogo.svg" alt="" aria-hidden="true" className="h-20 w-20" />
+            <img src="/icons/logo-160.png" alt="" aria-hidden="true" width="80" height="80" className="h-20 w-20" />
             <h1 className="text-3xl font-black text-realgreen tracking-tight italic" style={{ fontFamily: 'Poppins, sans-serif' }}>
               RealGood
             </h1>
           </div>
-          {!user ? (
+          {authLoading ? (
+            <div className="h-11 w-11 squircle bg-slate-100 animate-pulse" aria-hidden="true" />
+          ) : !user ? (
             <button
               type="button"
               onClick={handleHeaderAuthClick}
@@ -380,17 +389,17 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
               className="w-11 h-11 overflow-hidden squircle border border-emerald-200 bg-white shadow-sm transition-all hover:border-emerald-300 hover:shadow-md"
               aria-label="Profil und Abmelden"
             >
-              <img
-                src={user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=10B981&color=fff`}
-                alt={user.displayName || 'Profilbild'}
-                className="w-full h-full object-cover"
+              <Avatar
+                name={user.displayName}
+                src={user.photoURL}
+                className="h-full w-full"
               />
             </button>
           )}
         </div>
 
         <h2 className="text-2xl font-bold text-slate-900 leading-tight mb-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
-          Moin, {user ? user.displayName?.split(' ')[0] : 'Foodie'}! <Hamburger size={26} className="inline-block align-middle animate-pulse-gentle text-realorange" strokeWidth={1.8} />
+          Moin, {greetingName}! <Hamburger size={26} className="inline-block align-middle animate-pulse-gentle text-realorange" strokeWidth={1.8} />
         </h2>
         <p className="text-slate-500 text-sm mb-6 font-medium">
           Entdecke die besten Snacks in deiner Stadt.
@@ -404,13 +413,15 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Produkt suchen..."
+              placeholder="Produkt suchen …"
+              aria-label="Produkt suchen"
               className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-10 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100 transition-all"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => { setSearchQuery(''); setSearchResults([]); }}
+                aria-label="Suche leeren"
                 className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
               >
                 <X size={16} />
@@ -466,7 +477,9 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
         </div>
 
         {/* Login Action Area */}
-        {!user ? (
+        {authLoading ? (
+          <div className="w-full h-[54px] squircle bg-slate-100 mb-8 animate-pulse" aria-hidden="true" />
+        ) : !user ? (
           <button
             type="button"
             onClick={() => {
@@ -484,7 +497,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
             <span className="font-semibold tracking-wide text-slate-800 text-sm">Einloggen oder registrieren</span>
           </button>
         ) : (
-          <button onClick={() => onTabChange('profile')} className="w-full squircle bg-white border-2 border-slate-200 shadow-sm py-3.5 mb-8 flex justify-center items-center gap-3 transition-all hover:shadow-md hover:border-slate-300 active:scale-95">
+          <button type="button" onClick={() => onTabChange('profile')} className="w-full squircle bg-white border-2 border-slate-200 shadow-sm py-3.5 mb-8 flex justify-center items-center gap-3 transition-all hover:shadow-md hover:border-slate-300 active:scale-95">
             <User size={18} className="text-realgreen" />
             <span className="font-semibold tracking-wide text-slate-800 text-sm">Zu deinem Profil</span>
           </button>
@@ -725,7 +738,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
           </div>
         ) : (
           <div className="squircle border border-slate-200/70 bg-white px-5 py-8 text-center text-sm text-slate-400 shadow-sm">
-            Noch keine Dupes gefunden - scanne ein Produkt!
+            Noch keine Dupes gefunden – scanne ein Produkt!
           </div>
         )}
       </div>
@@ -747,10 +760,10 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
                 style={{ animationDelay: `${index * 80}ms` }}
               >
                 <div className="w-12 h-12 rounded-full p-[2px] border-[2.5px] border-emerald-50/0 group-hover:border-emerald-500/30 transition-colors flex-shrink-0 shimmer-bg shrink-0">
-                  <img
-                    src={getAvatarUrl(review)}
-                    alt={review.userName || 'Foodie'}
-                    className="w-full h-full rounded-full object-cover"
+                  <Avatar
+                    name={review.userName}
+                    src={review.userAvatar}
+                    className="w-full h-full rounded-full"
                   />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -771,7 +784,7 @@ export const HomeView = ({ onTabChange, initialDetailProduct, onInitialDetailCon
                     </span>
                   </div>
                   <p className="text-slate-600 text-[13px] italic leading-relaxed">
-                    "{getReviewPreview(review.comment)}"
+                    „{getReviewPreview(review.comment)}“
                   </p>
                 </div>
               </button>

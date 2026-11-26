@@ -15,11 +15,3 @@ export const formatTimeAgo = (timestamp) => {
   const diffDays = Math.floor(diffHours / 24);
   return `vor ${diffDays} Tag${diffDays === 1 ? '' : 'en'}`;
 };
-
-export const getAvatarUrl = (review) => {
-  if (review?.userAvatar) {
-    return review.userAvatar;
-  }
-
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(review?.userName || 'Foodie')}&background=ecfdf5&color=065f46`;
-};

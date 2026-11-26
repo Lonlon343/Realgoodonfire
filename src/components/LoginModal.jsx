@@ -19,7 +19,6 @@ export const LoginModal = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [datenschutzAccepted, setDatenschutzAccepted] = useState(false);
   const [isDatenschutzOpen, setIsDatenschutzOpen] = useState(false);
 
   const resetForm = useCallback(() => {
@@ -27,7 +26,6 @@ export const LoginModal = () => {
     setEmail('');
     setPassword('');
     setIsSubmitting(false);
-    setDatenschutzAccepted(false);
     clearAuthError();
   }, [clearAuthError]);
 
@@ -44,9 +42,10 @@ export const LoginModal = () => {
     resetForm();
   };
 
+  // Keep e-mail and password when switching modes; only the error is cleared.
   const handleToggleMode = () => {
     setIsRegistering((prev) => !prev);
-    resetForm();
+    clearAuthError();
   };
 
   const handleSubmit = async (event) => {
@@ -77,7 +76,7 @@ export const LoginModal = () => {
   if (!isLoginModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-5">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-5">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -85,9 +84,16 @@ export const LoginModal = () => {
       />
 
       {/* Modal Card */}
-      <div className="relative z-10 w-full max-w-sm rounded-squircle bg-realbg p-8 shadow-2xl animate-pop-in">
+      <div
+        className="relative z-10 w-full max-w-sm rounded-squircle bg-realbg p-8 shadow-2xl animate-pop-in"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-modal-title"
+      >
         {/* Close Button */}
         <button
+          type="button"
+          aria-label="Schließen"
           onClick={handleClose}
           className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors"
         >
@@ -97,7 +103,7 @@ export const LoginModal = () => {
         {/* Content */}
         <div className="text-center mb-6">
           <span className="text-5xl mb-4 block">🍔</span>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
+          <h2 id="login-modal-title" className="text-2xl font-bold text-slate-900 mb-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
             Willkommen bei RealGood
           </h2>
           <p className="text-slate-500 text-sm leading-relaxed">
@@ -159,34 +165,12 @@ export const LoginModal = () => {
             />
           </div>
 
-          {isRegistering && (
-            <label className="flex items-start gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={datenschutzAccepted}
-                onChange={(e) => setDatenschutzAccepted(e.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-realgreen cursor-pointer"
-              />
-              <span className="text-sm text-slate-600 leading-relaxed">
-                Ich habe die{' '}
-                <button
-                  type="button"
-                  onClick={() => setIsDatenschutzOpen(true)}
-                  className="font-semibold text-realgreen underline underline-offset-2 hover:brightness-90"
-                >
-                  Datenschutzerklärung
-                </button>{' '}
-                gelesen und stimme ihr zu.
-              </span>
-            </label>
-          )}
-
           <button
             type="submit"
-            disabled={isSubmitting || (isRegistering && !datenschutzAccepted)}
+            disabled={isSubmitting}
             className="w-full rounded-squircle bg-realgreen px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting ? 'Bitte warten...' : isRegistering ? 'Registrieren' : 'Einloggen'}
+            {isSubmitting ? 'Bitte warten …' : isRegistering ? 'Registrieren' : 'Einloggen'}
           </button>
         </form>
 
@@ -212,6 +196,18 @@ export const LoginModal = () => {
             Mit Google fortfahren
           </span>
         </button>
+
+        <p className="mt-4 text-center text-xs leading-relaxed text-slate-500">
+          Mit der Anmeldung akzeptierst du unsere{' '}
+          <button
+            type="button"
+            onClick={() => setIsDatenschutzOpen(true)}
+            className="font-semibold text-realgreen underline underline-offset-2 hover:brightness-90"
+          >
+            Datenschutzerklärung
+          </button>
+          .
+        </p>
 
         <button
           type="button"

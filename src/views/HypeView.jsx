@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Archive, ChevronRight, CupSoda, Flame, Loader2, PackageOpen, Popcorn, Snowflake } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Archive, ChevronRight, CupSoda, Flame, Loader2, PackageOpen, Popcorn, RefreshCw, Snowflake } from 'lucide-react';
 import { ProductArtwork } from '../components/ProductArtwork';
 import { StoreFilterChips } from '../components/StoreFilterChips';
 import { useShop } from '../context/useShop';
@@ -12,6 +12,9 @@ const CATEGORIES = [
   { name: 'Vorrat',   Icon: Archive,   accent: 'from-stone-400 to-stone-600' },
 ];
 
+const HYPE_LOAD_ERROR = 'Die Hype-Produkte konnten nicht geladen werden. Prüfe deine Verbindung.';
+const HYPE_LOAD_MORE_ERROR = 'Weitere Produkte konnten nicht geladen werden.';
+
 export const HypeView = () => {
   const { getHypeProducts } = useShop();
 
@@ -21,22 +24,37 @@ export const HypeView = () => {
   const [lastVisibleDoc, setLastVisibleDoc] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [loadMoreError, setLoadMoreError] = useState('');
+  // Incremented for every fresh load; answers of older filters are ignored.
+  const requestIdRef = useRef(0);
 
   // Fetch first page whenever category changes
   const fetchInitial = useCallback(async (cat, store) => {
+    requestIdRef.current += 1;
+    const requestId = requestIdRef.current;
+
     setIsLoading(true);
+    setLoadError('');
+    setLoadMoreError('');
     setHypeProducts([]);
     setLastVisibleDoc(null);
     setHasMore(true);
     try {
       const { docs, lastDoc } = await getHypeProducts(cat, null, store);
+      if (requestId !== requestIdRef.current) return;
       setHypeProducts(docs);
       setLastVisibleDoc(lastDoc);
       if (docs.length < 10) setHasMore(false);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error('Fehler beim Laden der Hype-Produkte:', err);
+      setHasMore(false);
+      setLoadError(HYPE_LOAD_ERROR);
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [getHypeProducts]);
 
@@ -47,16 +65,24 @@ export const HypeView = () => {
   // Load next 10
   const loadMore = async () => {
     if (!lastVisibleDoc || isLoading) return;
+    // A filter change starts a new request id; this answer is then dropped.
+    const requestId = requestIdRef.current;
     setIsLoading(true);
+    setLoadMoreError('');
     try {
       const { docs, lastDoc } = await getHypeProducts(activeCategory, lastVisibleDoc, activeStore);
+      if (requestId !== requestIdRef.current) return;
       setHypeProducts((prev) => [...prev, ...docs]);
       setLastVisibleDoc(lastDoc);
       if (docs.length < 10) setHasMore(false);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error('Fehler beim Nachladen:', err);
+      setLoadMoreError(HYPE_LOAD_MORE_ERROR);
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -222,14 +248,28 @@ export const HypeView = () => {
           </div>
         )}
 
-        {!isLoading && hypeProducts.length === 0 && (
+        {!isLoading && loadError && (
+          <div className="text-center py-16" role="alert">
+            <p className="text-red-600 text-sm font-medium">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => fetchInitial(activeCategory, activeStore)}
+              className="mt-4 inline-flex items-center gap-2 rounded-squircle border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-realgreen transition-all hover:border-emerald-300 hover:bg-emerald-100/80"
+            >
+              <RefreshCw size={15} strokeWidth={2} />
+              Nochmal versuchen
+            </button>
+          </div>
+        )}
+
+        {!isLoading && !loadError && hypeProducts.length === 0 && (
           <div className="text-center py-16">
             <PackageOpen size={44} strokeWidth={1.3} className="mx-auto mb-3 text-slate-300" />
             <p className="text-slate-400 text-sm font-medium">
-              Keine Hype-Produkte fuer diese Filter gefunden.
+              Keine Hype-Produkte für diese Filter gefunden.
             </p>
             <p className="text-slate-300 text-xs mt-1">
-              Aendere den Supermarkt oder die Kategorie, um mehr Treffer zu sehen.
+              Ändere den Supermarkt oder die Kategorie, um mehr Treffer zu sehen.
             </p>
           </div>
         )}
@@ -238,11 +278,15 @@ export const HypeView = () => {
       {/* Load More */}
       {hasMore && hypeProducts.length > 0 && !isLoading && (
         <div className="px-5 mt-6">
+          {loadMoreError ? (
+            <p className="mb-2 text-center text-xs font-medium text-red-600" role="alert">{loadMoreError}</p>
+          ) : null}
           <button
+            type="button"
             onClick={loadMore}
             className="w-full bg-white border-2 border-slate-200 rounded-squircle py-3.5 text-sm font-semibold text-slate-800 shadow-sm flex items-center justify-center gap-2 transition-all hover:shadow-md hover:border-slate-300 active:scale-95"
           >
-            Weitere laden
+            {loadMoreError ? 'Nochmal versuchen' : 'Weitere laden'}
             <ChevronRight size={16} className="text-slate-600" />
           </button>
         </div>

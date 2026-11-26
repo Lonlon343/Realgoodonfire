@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Star, ArrowLeft, Binoculars, Send } from 'lucide-react';
 import { ProductArtwork } from '../components/ProductArtwork';
 import { useShop } from '../context/useShop';
@@ -14,6 +14,9 @@ import {
   parsePriceValue,
   validateRealisticPrice,
 } from '../utils/pricing';
+import { getUserFacingErrorMessage } from '../utils/errorMessages';
+
+const STAR_LABELS = ['1 Stern', '2 Sterne', '3 Sterne', '4 Sterne', '5 Sterne'];
 
 export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
   const { currentProduct, addReview, searchProducts, stores } = useShop();
@@ -22,19 +25,19 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
   const [hoveredRating, setHoveredRating] = useState(0);
   const [comment, setComment] = useState('');
   const [price, setPrice] = useState('');
-  const [store, setStore] = useState('Aldi');
+  const [store, setStore] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [priceError, setPriceError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [isDupeModalOpen, setIsDupeModalOpen] = useState(false);
-  const draftPriceValidation = validateRealisticPrice(price, { allowEmpty: true });
-  const dupeProductForModal = {
-    ...currentProduct,
-    price: draftPriceValidation.isValid && draftPriceValidation.parsed !== null
-      ? draftPriceValidation.parsed
-      : currentProduct.price,
-  };
+  const redirectTimeoutRef = useRef(null);
+
+  useEffect(() => () => {
+    if (redirectTimeoutRef.current) {
+      clearTimeout(redirectTimeoutRef.current);
+    }
+  }, []);
 
   if (!currentProduct) {
     return (
@@ -52,7 +55,19 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
     );
   }
 
+  const draftPriceValidation = validateRealisticPrice(price, { allowEmpty: true });
+  const dupeProductForModal = {
+    ...currentProduct,
+    price: draftPriceValidation.isValid && draftPriceValidation.parsed !== null
+      ? draftPriceValidation.parsed
+      : currentProduct.price,
+  };
+
   const handleSubmit = async () => {
+    if (success || isSubmitting) {
+      return;
+    }
+
     if (rating === 0) {
       setSubmitError('Bitte wähle zuerst eine Sternebewertung.');
       return;
@@ -80,7 +95,8 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
         rating,
         comment,
         price: parsedPrice,
-        store,
+        // No silent default: an unselected store is stored as null.
+        store: store || null,
         date: new Date().toISOString(),
       };
 
@@ -90,17 +106,22 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
       setRating(0);
       setComment('');
       setPrice('');
+      setStore('');
 
-      setTimeout(() => {
+      redirectTimeoutRef.current = setTimeout(() => {
         if (onReviewSubmitted) {
           onReviewSubmitted(currentProduct);
         } else {
-          onTabChange('community');
+          onTabChange('home');
         }
       }, 1200);
     } catch (error) {
       console.error('Fehler beim Speichern:', error);
-      setSubmitError(error?.message || 'Fehler beim Speichern der Bewertung.');
+      setSubmitError(getUserFacingErrorMessage(
+        error,
+        'Deine Bewertung konnte nicht gespeichert werden. Bitte versuche es erneut.',
+        'Bitte melde dich an, um eine Bewertung zu posten.'
+      ));
     } finally {
       setIsSubmitting(false);
     }
@@ -143,6 +164,7 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
       {/* Header */}
       <div className="bg-gradient-to-b from-emerald-50 to-white px-4 py-6 border-b">
         <button
+          type="button"
           onClick={() => onTabChange('scanner')}
           className="flex items-center gap-2 text-emerald-600 font-bold mb-4 hover:text-emerald-700"
         >
@@ -186,26 +208,29 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
       <form onSubmit={(e) => e.preventDefault()} className="px-4 py-6 space-y-6">
         {/* Success Message */}
         {success && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4" role="status">
             <p className="text-green-700 font-bold">✅ Bewertung gespeichert!</p>
-            <p className="text-sm text-green-600 mt-1">Weiterleitung zur Community...</p>
+            <p className="text-sm text-green-600 mt-1">Weiterleitung zur Startseite …</p>
           </div>
         )}
 
         {/* Star Rating */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-          <h2 className="font-bold text-slate-900 mb-4">Wie ist die Qualität?</h2>
-          <div className="flex gap-3 justify-center">
+          <h2 id="rating-stars-label" className="font-bold text-slate-900 mb-4">Wie ist die Qualität?</h2>
+          <div className="flex gap-3 justify-center" role="group" aria-labelledby="rating-stars-label">
             {[1, 2, 3, 4, 5].map((star) => (
               <button
                 key={star}
                 type="button"
+                aria-label={STAR_LABELS[star - 1]}
+                aria-pressed={rating === star}
                 onClick={() => setRating(star)}
                 onMouseEnter={() => setHoveredRating(star)}
                 onMouseLeave={() => setHoveredRating(0)}
                 className="transition-transform hover:scale-110"
               >
                 <Star
+                  aria-hidden="true"
                   size={40}
                   className={`${
                     star <= (hoveredRating || rating)
@@ -225,10 +250,11 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
 
         {/* Price */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-          <label className="block font-bold text-slate-900 mb-3">Preis (optional)</label>
+          <label htmlFor="rating-price" className="block font-bold text-slate-900 mb-3">Preis (optional)</label>
           <div className="flex gap-2">
             <span className="text-2xl font-bold text-slate-900 self-center">€</span>
             <input
+              id="rating-price"
               type="number"
               step="0.01"
               min="0.01"
@@ -247,12 +273,14 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
 
         {/* Store */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-          <label className="block font-bold text-slate-900 mb-3">Supermarkt</label>
+          <label htmlFor="rating-store" className="block font-bold text-slate-900 mb-3">Supermarkt (optional)</label>
           <select
+            id="rating-store"
             value={store}
             onChange={(e) => setStore(e.target.value)}
             className="w-full px-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
           >
+            <option value="">Bitte wählen</option>
             {stores.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -263,11 +291,12 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
 
         {/* Comment */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-          <label className="block font-bold text-slate-900 mb-3">Kommentar (optional)</label>
+          <label htmlFor="rating-comment" className="block font-bold text-slate-900 mb-3">Kommentar (optional)</label>
           <textarea
+            id="rating-comment"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Z.B. Super lecker, aber zu teuer..."
+            placeholder="z. B. Super lecker, aber zu teuer"
             maxLength="500"
             rows="4"
             className="w-full px-4 py-3 border-2 border-slate-300 rounded-lg focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
@@ -277,7 +306,7 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
 
         {/* Submit error */}
         {submitError && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600" role="alert">
             {submitError}
           </div>
         )}
@@ -285,12 +314,12 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
         {/* Submit Button */}
         <button
           type="button"
-          disabled={isSubmitting || rating === 0}
+          disabled={isSubmitting || success || rating === 0}
           onClick={() => requireAuth(() => handleSubmit())}
           className="w-full px-6 py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
         >
           <Send size={20} />
-          {isSubmitting ? 'Speichere...' : 'Bewertung posten'}
+          {isSubmitting ? 'Speichere …' : 'Bewertung posten'}
         </button>
       </form>
 
@@ -300,9 +329,9 @@ export const RatingView = ({ onTabChange, onReviewSubmitted }) => {
           currentProduct={dupeProductForModal}
           searchProducts={searchProducts}
           onClose={() => setIsDupeModalOpen(false)}
-          onViewFeed={() => {
+          onGoHome={() => {
             setIsDupeModalOpen(false);
-            onTabChange('community');
+            onTabChange('home');
           }}
         />
       )}

@@ -4,6 +4,7 @@ import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
 import { DupeSuccessModal } from './DupeSuccessModal';
 import { ProductArtwork } from './ProductArtwork';
+import { getUserFacingErrorMessage } from '../utils/errorMessages';
 import {
   MAX_REALISTIC_PRICE_EUR,
   MAX_REALISTIC_PRICE_INPUT,
@@ -24,7 +25,7 @@ export const DupeSuggestModal = ({
   currentProduct,
   searchProducts = async () => [],
   onSuccess,
-  onViewFeed,
+  onGoHome,
 }) => {
   const dupeProduct = dupeProductProp || currentProduct;
   const { createDupeLink } = useShop();
@@ -83,7 +84,8 @@ export const DupeSuggestModal = ({
         );
       } catch (searchError) {
         if (isActive) {
-          setError(searchError?.message || 'Die Produktsuche hat nicht funktioniert.');
+          console.error('Fehler bei der Original-Suche:', searchError);
+          setError(getUserFacingErrorMessage(searchError, 'Die Produktsuche hat nicht funktioniert. Bitte versuche es erneut.'));
           setSearchResults([]);
         }
       } finally {
@@ -169,15 +171,26 @@ export const DupeSuggestModal = ({
       setSubmittedDupe(createdDupe);
       onSuccess?.(createdDupe);
     } catch (submitError) {
-      setError(submitError?.message || 'Der Dupe-Link konnte nicht gespeichert werden.');
+      console.error('Fehler beim Eintragen des Dupes:', submitError);
+      setError(getUserFacingErrorMessage(
+        submitError,
+        'Der Dupe konnte nicht gespeichert werden. Bitte versuche es erneut.',
+        'Bitte melde dich an, um einen Dupe einzutragen.'
+      ));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleViewFeed = () => {
-    onViewFeed?.(submittedDupe);
+  const handleGoHome = () => {
+    onGoHome?.(submittedDupe);
     onClose?.();
+  };
+
+  const handleNewSearch = () => {
+    setSelectedOriginal(null);
+    setSwapped(false);
+    setError('');
   };
 
   const handleMissingOriginalPriceChange = (event) => {
@@ -217,7 +230,7 @@ export const DupeSuggestModal = ({
       <DupeSuccessModal
         isOpen={isOpen}
         initialMatchScore={submittedDupe.matchScore}
-        onViewFeed={handleViewFeed}
+        onGoHome={handleGoHome}
       />
     );
   }
@@ -400,7 +413,7 @@ export const DupeSuggestModal = ({
               </div>
 
               <p className="mt-3 text-center text-[11px] text-slate-400">
-                Tippe auf <ArrowLeftRight size={10} className="inline" /> um die Rollen zu tauschen
+                Tippe auf <ArrowLeftRight size={10} className="inline" />, um die Rollen zu tauschen
               </p>
             </div>
 
@@ -434,8 +447,9 @@ export const DupeSuggestModal = ({
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setSelectedOriginal(null)}
-                className="flex-1 rounded-squircle border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                onClick={handleNewSearch}
+                disabled={isSubmitting}
+                className="flex-1 rounded-squircle border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Andere Suche
               </button>
@@ -445,7 +459,7 @@ export const DupeSuggestModal = ({
                 disabled={isSubmitting}
                 className="flex-[1.35] rounded-squircle bg-realgreen px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSubmitting ? 'Wird eingetragen...' : 'Ja, als Dupe eintragen!'}
+                {isSubmitting ? 'Wird eingetragen …' : 'Ja, als Dupe eintragen!'}
               </button>
             </div>
           </div>

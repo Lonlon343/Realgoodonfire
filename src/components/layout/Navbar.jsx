@@ -8,7 +8,7 @@ export const Navbar = ({ activeTab, onTabChange }) => {
   ];
   const rightTabs = [
     { id: 'community', label: 'Feed', icon: Users },
-    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'profile', label: 'Profil', icon: User },
   ];
 
   const renderTab = (tab) => {
@@ -17,6 +17,8 @@ export const Navbar = ({ activeTab, onTabChange }) => {
     return (
       <button
         key={tab.id}
+        type="button"
+        aria-current={isActive ? 'page' : undefined}
         onClick={() => onTabChange(tab.id)}
         className={`flex flex-col items-center justify-center py-2 px-4 rounded-xl transition-all duration-300 ${
           isActive
@@ -38,6 +40,9 @@ export const Navbar = ({ activeTab, onTabChange }) => {
         {/* FAB Button */}
         <div className="absolute left-1/2 -top-6 transform -translate-x-1/2 z-50">
           <button
+            type="button"
+            aria-label="Produkt scannen"
+            aria-current={activeTab === 'scanner' ? 'page' : undefined}
             onClick={() => onTabChange('scanner')}
             className={`flex items-center justify-center w-14 h-14 bg-emerald-600 text-white shadow-[0_8px_20px_rgba(5,150,105,0.3)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_25px_rgba(5,150,105,0.4)] hover:bg-emerald-500 hover:scale-105 animate-pulse-gentle squircle ${
               activeTab === 'scanner' ? 'ring-4 ring-emerald-100 scale-105' : ''

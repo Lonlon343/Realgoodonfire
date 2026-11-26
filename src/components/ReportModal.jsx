@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Flag, X } from 'lucide-react';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
@@ -19,20 +19,34 @@ export const ReportModal = ({ isOpen, reviewId, onClose, onReported }) => {
   const [details, setDetails] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  // Parents pass an inline onClose; reading it through a ref keeps a parent
+  // re-render from resetting the form or re-binding the key listener.
+  const onCloseRef = useRef(onClose);
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  // Reset the form only when the dialog opens or targets another review.
+  useEffect(() => {
     if (!isOpen) {
-      return undefined;
+      return;
     }
 
     setSelectedReason('');
     setDetails('');
     setErrorMessage('');
     setIsSubmitting(false);
+  }, [isOpen, reviewId]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
 
     const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        onClose?.();
+      if (event.key === 'Escape' && !isSubmitting) {
+        onCloseRef.current?.();
       }
     };
 
@@ -40,11 +54,19 @@ export const ReportModal = ({ isOpen, reviewId, onClose, onReported }) => {
     return () => {
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, isSubmitting]);
 
   if (!isOpen || !reviewId) {
     return null;
   }
+
+  const handleClose = () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    onClose?.();
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -81,13 +103,14 @@ export const ReportModal = ({ isOpen, reviewId, onClose, onReported }) => {
       aria-modal="true"
       aria-labelledby="report-modal-title"
     >
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
 
       <div className="relative z-10 flex w-full max-w-md flex-col rounded-t-[2rem] bg-realbg p-6 shadow-2xl animate-pop-in sm:rounded-squircle">
         <button
           type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+          onClick={handleClose}
+          disabled={isSubmitting}
+          className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
           aria-label="Schließen"
         >
           <X size={16} strokeWidth={2.5} />
@@ -150,7 +173,7 @@ export const ReportModal = ({ isOpen, reviewId, onClose, onReported }) => {
               value={details}
               onChange={(event) => setDetails(event.target.value.slice(0, MAX_DETAILS_LENGTH))}
               rows={3}
-              placeholder="Beschreibe das Problem kurz..."
+              placeholder="Beschreibe das Problem kurz"
               className="w-full resize-none rounded-squircle border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-100"
             />
             <span className="self-end text-[11px] text-slate-400">
@@ -167,7 +190,7 @@ export const ReportModal = ({ isOpen, reviewId, onClose, onReported }) => {
           <div className="flex gap-3 pt-1">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={isSubmitting}
               className="flex-1 rounded-squircle border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -178,7 +201,7 @@ export const ReportModal = ({ isOpen, reviewId, onClose, onReported }) => {
               disabled={isSubmitting || !selectedReason}
               className="flex-[1.2] rounded-squircle bg-red-500 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-red-200 transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSubmitting ? 'Wird gesendet...' : 'Melden'}
+              {isSubmitting ? 'Wird gesendet …' : 'Melden'}
             </button>
           </div>
         </form>
