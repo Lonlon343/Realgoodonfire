@@ -12,6 +12,21 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
+    // Products are keyed by their EAN/GTIN barcode.
+    function isValidProductId(productId) {
+      return productId is string && productId.matches('^[0-9]{8,14}$');
+    }
+
+    // Images may only point to OpenFoodFacts (https), or be empty.
+    function isAllowedImage(value) {
+      return value == ''
+        || (
+          value is string
+          && value.size() <= 2048
+          && value.matches('^https://[a-z0-9.-]+[.]openfoodfacts[.](org|net)/.*$')
+        );
+    }
+
     function isVoteChoice(value) {
       return value == 'up' || value == 'down';
     }
@@ -21,7 +36,8 @@ service cloud.firestore {
     }
 
     function expectedDupeMatchScore(priceSavingsPercentage, votes) {
-      return clampScore(50 + (priceSavingsPercentage / 2) + ((votes.up - votes.down) * 4));
+      // Float division: with an int savings value, `/ 2` would truncate.
+      return clampScore(50 + (priceSavingsPercentage / 2.0) + ((votes.up - votes.down) * 4));
     }
 
     function matchScoreIsValid(priceSavingsPercentage, votes, matchScore) {
@@ -54,7 +70,8 @@ service cloud.firestore {
     // The savings percentage must be derived from the two stored prices (client rounds
     // to one decimal), or be exactly 0 when a price comparison is not possible.
     function expectedSavingsPercentage(originalPrice, dupePrice) {
-      return ((originalPrice - dupePrice) / originalPrice) * 100;
+      // Float arithmetic: with int prices, `(a - b) / a` would truncate to an int.
+      return ((originalPrice - dupePrice) * 100.0) / originalPrice;
     }
 
     function savingsPercentageIsValid(originalPrice, dupePrice, priceSavingsPercentage) {
@@ -70,8 +87,10 @@ service cloud.firestore {
       );
     }
 
-    function isValidDupeCreate() {
+    function isValidDupeCreate(dupeDocId) {
       return isRealAccount()
+        // Deterministic id: the same pair can only be created once.
+        && dupeDocId == request.resource.data.originalId + '_' + request.resource.data.dupeId
         && request.resource.data.keys().hasOnly([
           'originalId',
           'originalName',
@@ -99,11 +118,11 @@ service cloud.firestore {
         && isBoundedString(request.resource.data.originalName, 200)
         && isBoundedString(request.resource.data.originalBrand, 120)
         && isBoundedString(request.resource.data.originalCategory, 60)
-        && isBoundedString(request.resource.data.originalImage, 2048)
+        && isAllowedImage(request.resource.data.originalImage)
         && isBoundedString(request.resource.data.dupeName, 200)
         && isBoundedString(request.resource.data.dupeBrand, 120)
         && isBoundedString(request.resource.data.dupeCategory, 60)
-        && isBoundedString(request.resource.data.dupeImage, 2048)
+        && isAllowedImage(request.resource.data.dupeImage)
         && request.resource.data.createdAt == request.time
         && savingsPercentageIsValid(
           request.resource.data.originalPrice,
@@ -130,34 +149,49 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'userVotes', 'matchScore']);
     }
 
+    // Legacy dupes may lack `userVotes`; a missing map key is read as null via
+    // .get(), because indexing a missing key is an evaluation error in rules.
+    function storedUserVotes() {
+      return resource.data.get('userVotes', {});
+    }
+
     function userVoteMapIsValid() {
-      return resource.data.userVotes is map
+      return storedUserVotes() is map
         && request.resource.data.userVotes is map
-        && request.resource.data.userVotes.diff(resource.data.userVotes).affectedKeys().hasOnly([request.auth.uid])
-        && isVoteChoice(request.resource.data.userVotes[request.auth.uid]);
+        && request.resource.data.userVotes.diff(storedUserVotes()).affectedKeys().hasOnly([request.auth.uid])
+        && isVoteChoice(request.resource.data.userVotes.get(request.auth.uid, null));
+    }
+
+    function voteTransitionIsValid(previousVote, nextVote, oldVotes, newVotes) {
+      return (
+        previousVote == null
+        && nextVote == 'up'
+        && newVotes.up == oldVotes.up + 1
+        && newVotes.down == oldVotes.down
+      ) || (
+        previousVote == null
+        && nextVote == 'down'
+        && newVotes.up == oldVotes.up
+        && newVotes.down == oldVotes.down + 1
+      ) || (
+        previousVote == 'up'
+        && nextVote == 'down'
+        && newVotes.up == oldVotes.up - 1
+        && newVotes.down == oldVotes.down + 1
+      ) || (
+        previousVote == 'down'
+        && nextVote == 'up'
+        && newVotes.up == oldVotes.up + 1
+        && newVotes.down == oldVotes.down - 1
+      );
     }
 
     function voteCountersAreValid() {
-      return (
-        resource.data.userVotes[request.auth.uid] == null
-        && request.resource.data.userVotes[request.auth.uid] == 'up'
-        && request.resource.data.votes.up == resource.data.votes.up + 1
-        && request.resource.data.votes.down == resource.data.votes.down
-      ) || (
-        resource.data.userVotes[request.auth.uid] == null
-        && request.resource.data.userVotes[request.auth.uid] == 'down'
-        && request.resource.data.votes.up == resource.data.votes.up
-        && request.resource.data.votes.down == resource.data.votes.down + 1
-      ) || (
-        resource.data.userVotes[request.auth.uid] == 'up'
-        && request.resource.data.userVotes[request.auth.uid] == 'down'
-        && request.resource.data.votes.up == resource.data.votes.up - 1
-        && request.resource.data.votes.down == resource.data.votes.down + 1
-      ) || (
-        resource.data.userVotes[request.auth.uid] == 'down'
-        && request.resource.data.userVotes[request.auth.uid] == 'up'
-        && request.resource.data.votes.up == resource.data.votes.up + 1
-        && request.resource.data.votes.down == resource.data.votes.down - 1
+      return voteTransitionIsValid(
+        storedUserVotes().get(request.auth.uid, null),
+        request.resource.data.userVotes.get(request.auth.uid, null),
+        resource.data.votes,
+        request.resource.data.votes
       );
     }
 
@@ -188,7 +222,8 @@ service cloud.firestore {
         'reviewCount',
         'averageRating',
         'nameLower',
-        'brandLower'
+        'brandLower',
+        'lastReviewId'
       ]);
     }
 
@@ -207,23 +242,86 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
 
-    // Scanner re-import: may refresh descriptive fields only, never counters or price.
+    // Descriptive refresh (real accounts only): descriptive fields only, never
+    // counters or price. The image is validated only when it changes, so legacy
+    // products with other image values stay editable.
     function isProductScanUpdate() {
       return productAffectedKeys().hasOnly([
         'name', 'brand', 'image', 'nutriScore', 'category', 'nameLower', 'brandLower'
       ])
-      && productDescriptiveFieldsAreValid(request.resource.data);
+      && productDescriptiveFieldsAreValid(request.resource.data)
+      && (!productAffectedKeys().hasAny(['image']) || isAllowedImage(request.resource.data.image));
     }
 
-    // addReview transaction: exactly one more review, average stays within 1..5 range.
-    function isProductReviewStatsUpdate() {
-      return productAffectedKeys().hasOnly(['reviewCount', 'averageRating', 'price'])
+    function reviewPath(reviewId) {
+      return /databases/$(database)/documents/reviews/$(reviewId);
+    }
+
+    // The stats write must name a review that is created in the same
+    // transaction/batch, by the same user, for this product.
+    function isNewOwnReviewOfProduct(reviewId, productId) {
+      return reviewId is string
+        && reviewId.size() > 0
+        && reviewId.size() <= 64
+        && !exists(reviewPath(reviewId))
+        && existsAfter(reviewPath(reviewId))
+        && getAfter(reviewPath(reviewId)).data.productId == productId
+        && getAfter(reviewPath(reviewId)).data.userId == request.auth.uid;
+    }
+
+    // Float-safe running average; the client rounds to one decimal (max 0.05).
+    function averageIsValid(oldAverage, oldCount, rating, newAverage) {
+      return newAverage is number
+        && newAverage >= 0
+        && newAverage <= 5
+        && math.abs(newAverage - (((oldAverage * oldCount) + rating) / (oldCount + 1.0))) <= 0.06;
+    }
+
+    // addReview transaction on an existing product: exactly one more review,
+    // tied to the review created in the same transaction.
+    function isProductReviewStatsUpdate(productId) {
+      return productAffectedKeys().hasOnly(['reviewCount', 'averageRating', 'price', 'lastReviewId'])
+        && isNewOwnReviewOfProduct(request.resource.data.get('lastReviewId', null), productId)
         && request.resource.data.reviewCount is int
         && request.resource.data.reviewCount == resource.data.get('reviewCount', 0) + 1
-        && request.resource.data.averageRating is number
-        && request.resource.data.averageRating >= 0
-        && request.resource.data.averageRating <= 5
+        && averageIsValid(
+          resource.data.get('averageRating', 0),
+          resource.data.get('reviewCount', 0),
+          getAfter(reviewPath(request.resource.data.lastReviewId)).data.rating,
+          request.resource.data.averageRating
+        )
         && isValidOptionalPrice(request.resource.data.get('price', null));
+    }
+
+    // Shared checks of both product create paths.
+    function isValidProductCreateBase(productId) {
+      return isValidProductId(productId)
+        && hasOnlyProductKeys()
+        && productDescriptiveFieldsAreValid(request.resource.data)
+        && isAllowedImage(request.resource.data.image)
+        && request.resource.data.createdAt == request.time
+        && isValidOptionalPrice(request.resource.data.get('price', null));
+    }
+
+    // Scanner import (anonymous sessions allowed): empty counters.
+    function isProductScanCreate() {
+      return request.resource.data.reviewCount == 0
+        && request.resource.data.averageRating == 0
+        && !('lastReviewId' in request.resource.data);
+    }
+
+    // addReview transaction when the product document is missing: the product is
+    // created together with its first review.
+    function isProductCreateWithFirstReview(productId) {
+      return isRealAccount()
+        && request.resource.data.reviewCount == 1
+        && isNewOwnReviewOfProduct(request.resource.data.get('lastReviewId', null), productId)
+        && averageIsValid(
+          0,
+          0,
+          getAfter(reviewPath(request.resource.data.lastReviewId)).data.rating,
+          request.resource.data.averageRating
+        );
     }
 
     // createDupeLink: stores a price learned from the dupe form.
@@ -234,19 +332,18 @@ service cloud.firestore {
 
     match /products/{productId} {
       allow read: if true;
-      // First import of a product (scanner, anonymous session allowed).
+      // First import of a product (scanner: anonymous session allowed), or the
+      // product created together with its first review (real accounts).
       allow create: if isSignedIn()
-        && hasOnlyProductKeys()
-        && productDescriptiveFieldsAreValid(request.resource.data)
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.reviewCount == 0
-        && request.resource.data.averageRating == 0
-        && isValidOptionalPrice(request.resource.data.get('price', null));
-      allow update: if isSignedIn()
+        && isValidProductCreateBase(productId)
+        && (isProductScanCreate() || isProductCreateWithFirstReview(productId));
+      // Updates are reserved for real accounts; anonymous sessions only create.
+      allow update: if isRealAccount()
         && hasOnlyProductKeys()
         && (
           isProductScanUpdate()
-          || (isRealAccount() && (isProductReviewStatsUpdate() || isProductPriceUpdate()))
+          || isProductReviewStatsUpdate(productId)
+          || isProductPriceUpdate()
         );
       allow delete: if false;
     }
@@ -258,6 +355,7 @@ service cloud.firestore {
         // Display identity must match the signed-in user's ID token, so a review can
         // never be posted under another user's name or avatar.
         && request.resource.data.userName == request.auth.token.get('name', 'Foodie')
+        && isNonEmptyString(request.resource.data.userName, 80)
         && (
           request.resource.data.userAvatar == null
           || request.resource.data.userAvatar == request.auth.token.get('picture', null)
@@ -265,7 +363,7 @@ service cloud.firestore {
         && isNonEmptyString(request.resource.data.productId, 64)
         && isBoundedString(request.resource.data.productName, 200)
         && isBoundedString(request.resource.data.brand, 120)
-        && isBoundedString(request.resource.data.image, 2048)
+        && isAllowedImage(request.resource.data.image)
         && request.resource.data.rating is int
         && request.resource.data.rating >= 1
         && request.resource.data.rating <= 5
@@ -291,12 +389,14 @@ service cloud.firestore {
           'userAvatar'
         ])
         && isValidOptionalPrice(request.resource.data.price);
-      allow update, delete: if false;
+      // Account deletion: a real account may delete its own reviews.
+      allow delete: if isRealAccount() && resource.data.userId == request.auth.uid;
+      allow update: if false;
     }
 
-    match /dupes/{dupeId} {
+    match /dupes/{dupeDocId} {
       allow read: if true;
-      allow create: if isValidDupeCreate();
+      allow create: if isValidDupeCreate(dupeDocId);
       allow update: if isValidDupeVoteUpdate();
       allow delete: if false;
     }
@@ -326,11 +426,11 @@ service cloud.firestore {
           'status',
           'createdAt'
         ])
-        && request.resource.data.reviewId is string
-        && request.resource.data.reviewId.size() > 0
+        && isNonEmptyString(request.resource.data.reviewId, 64)
         && isValidReportReason(request.resource.data.reason)
         && isValidReportDetails(request.resource.data.details)
-        && request.resource.data.status == 'pending';
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time;
     }
   }
 }
