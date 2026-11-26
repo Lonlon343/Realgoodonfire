@@ -12,7 +12,9 @@ export const LoginModal = () => {
     registerWithEmail,
     loginWithEmail,
     authError,
+    authNotice,
     clearAuthError,
+    resetPassword,
   } = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState('');
@@ -58,6 +60,17 @@ export const LoginModal = () => {
       } else {
         await loginWithEmail(email, password);
       }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Uses the address typed into the e-mail field; the context shows the result.
+  const handlePasswordReset = async () => {
+    setIsSubmitting(true);
+
+    try {
+      await resetPassword(email);
     } finally {
       setIsSubmitting(false);
     }
@@ -117,6 +130,12 @@ export const LoginModal = () => {
           </div>
         )}
 
+        {authNotice && (
+          <div className="mb-4 rounded-squircle border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700" role="status">
+            {authNotice}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-3">
           {isRegistering && (
             <div>
@@ -163,6 +182,16 @@ export const LoginModal = () => {
               className="w-full rounded-squircle border border-slate-200 bg-white px-4 py-3.5 text-base text-slate-900 placeholder:text-slate-400 focus:border-realgreen focus:outline-none focus:ring-4 focus:ring-realgreen/10"
               autoComplete={isRegistering ? 'new-password' : 'current-password'}
             />
+            {!isRegistering && (
+              <button
+                type="button"
+                onClick={handlePasswordReset}
+                disabled={isSubmitting}
+                className="mt-2 text-xs font-semibold text-realgreen underline underline-offset-2 hover:brightness-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Passwort vergessen?
+              </button>
+            )}
           </div>
 
           <button

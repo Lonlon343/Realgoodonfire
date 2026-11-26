@@ -83,26 +83,30 @@
   scrollbar-width: none;
 }
 
-/* Global text smoothing */
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+/* Global resets live in the base layer. Outside a layer they would override
+   every Tailwind utility (button backgrounds and text colours). */
+@layer base {
+  /* Global text smoothing */
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-button {
-  font-family: inherit;
-  font-size: inherit;
-  color: inherit;
-  border: 0;
-  background: transparent;
-}
+  button {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    border: 0;
+    background: transparent;
+  }
 
-button:not(:disabled) {
-  cursor: pointer;
-}
+  button:not(:disabled) {
+    cursor: pointer;
+  }
 
-button:focus,
-button:focus-visible {
-  outline: 2px solid rgba(16, 185, 129, 0.35);
-  outline-offset: 2px;
+  button:focus,
+  button:focus-visible {
+    outline: 2px solid rgba(16, 185, 129, 0.35);
+    outline-offset: 2px;
+  }
 }

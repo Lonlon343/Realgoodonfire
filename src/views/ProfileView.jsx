@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Flame, Loader2, LogOut, RefreshCw, ShieldCheck, Star, Trash2 } from 'lucide-react';
 import { Avatar } from '../components/Avatar';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { DatenschutzModal } from '../components/DatenschutzModal';
 import { ProductDetailModal } from '../components/ProductDetailModal';
 import { StarRating } from '../components/StarRating';
@@ -8,7 +9,7 @@ import { useAuth } from '../context/useAuth';
 import { useShop } from '../context/useShop';
 
 export const ProfileView = () => {
-  const { currentUser, authLoading, logout, setIsLoginModalOpen, clearAuthError } = useAuth();
+  const { currentUser, authLoading, logout, deleteAccount, setIsLoginModalOpen, clearAuthError } = useAuth();
   const { getUserReviews } = useShop();
 
   const [userReviews, setUserReviews] = useState([]);
@@ -16,6 +17,9 @@ export const ProfileView = () => {
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [isDatenschutzOpen, setIsDatenschutzOpen] = useState(false);
   const [detailProduct, setDetailProduct] = useState(null);
 
@@ -54,8 +58,23 @@ export const ProfileView = () => {
   const hypeCount = userReviews.filter((r) => r.rating >= 4).length;
   const recentReviews = userReviews.slice(0, 3);
 
-  const handleDelete = () => {
-    window.alert('Konto-Löschung ist aktuell noch nicht verfügbar. Bitte kontaktiere uns direkt.');
+  const handleDeleteConfirmed = async () => {
+    setIsDeleteConfirmOpen(false);
+    setDeleteError('');
+    setIsDeleting(true);
+
+    try {
+      const result = await deleteAccount();
+
+      // On success the auth state changes and this view shows the logged-out card.
+      if (!result.ok) {
+        setDeleteError(result.reason === 'reauth'
+          ? 'Aus Sicherheitsgründen musst du dich kurz vorher frisch angemeldet haben. Bitte melde dich ab, wieder an und lösche dein Konto dann erneut.'
+          : 'Dein Konto konnte nicht gelöscht werden. Bitte versuche es erneut.');
+      }
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -235,12 +254,19 @@ export const ProfileView = () => {
 
           <button
             type="button"
-            onClick={handleDelete}
-            className="mt-2 w-full flex items-center gap-3 rounded-squircle px-4 py-3 text-left text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+            onClick={() => setIsDeleteConfirmOpen(true)}
+            disabled={isDeleting}
+            className="mt-2 w-full flex items-center gap-3 rounded-squircle px-4 py-3 text-left text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Trash2 size={16} className="text-red-500" />
-            <span>Konto löschen</span>
+            <span>{isDeleting ? 'Konto wird gelöscht …' : 'Konto löschen'}</span>
           </button>
+
+          {deleteError && (
+            <p className="mt-2 rounded-squircle border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600" role="alert">
+              {deleteError}
+            </p>
+          )}
         </section>
 
       </div>
@@ -254,6 +280,16 @@ export const ProfileView = () => {
       <DatenschutzModal
         isOpen={isDatenschutzOpen}
         onClose={() => setIsDatenschutzOpen(false)}
+      />
+
+      <ConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        title="Konto wirklich löschen?"
+        message="Dein Konto und alle deine Bewertungen werden endgültig gelöscht. Das lässt sich nicht rückgängig machen."
+        confirmLabel="Endgültig löschen"
+        danger
+        onConfirm={handleDeleteConfirmed}
+        onCancel={() => setIsDeleteConfirmOpen(false)}
       />
     </div>
   );

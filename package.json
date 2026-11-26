@@ -14,14 +14,17 @@
   "dependencies": {
     "@capacitor/android": "^8.3.0",
     "@capacitor/core": "^8.3.0",
+    "@fontsource/poppins": "5.3.0",
     "@yudiel/react-qr-scanner": "^2.5.1",
     "autoprefixer": "^10.4.23",
+    "barcode-detector": "3.0.8",
     "firebase": "^12.12.0",
     "lucide-react": "^0.562.0",
     "postcss": "^8.5.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "zxing-wasm": "2.2.4"
   },
   "devDependencies": {
     "@capacitor/assets": "4.0.0",
