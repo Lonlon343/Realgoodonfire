@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { isAllowedProductImageUrl } from '../utils/safeUrls';
 
 const CATEGORY_THEME_MAP = {
   Snacks: {
@@ -69,19 +70,10 @@ const VARIANT_MAP = {
 
 const joinClasses = (...values) => values.filter(Boolean).join(' ');
 
-const normalizeImageSource = (value) => {
-  if (typeof value !== 'string') {
-    return '';
-  }
-
-  const trimmedValue = value.trim();
-
-  if (!trimmedValue || trimmedValue.includes('placehold.co')) {
-    return '';
-  }
-
-  return trimmedValue;
-};
+// Only Open Food Facts images are loaded; any other host falls back to the artwork placeholder.
+const normalizeImageSource = (value) => (
+  isAllowedProductImageUrl(value) ? value.trim() : ''
+);
 
 const getInitials = (name) => {
   const parts = (name || '')
@@ -131,6 +123,8 @@ export const ProductArtwork = ({
         <img
           src={safeSrc}
           alt={alt || name || 'Produktbild'}
+          referrerPolicy="no-referrer"
+          loading="lazy"
           onError={() => setFailedSrc(safeSrc)}
           className={imageClassName}
         />

@@ -7,12 +7,15 @@ import {
   limit,
   orderBy,
   query,
+  startAfter,
   where,
 } from 'firebase/firestore';
 import { getStoreQueryValues, normalizeStoreName } from '../data';
 
 const HYPE_PAGE_SIZE = 10;
 const PRODUCT_ID_BATCH_SIZE = 30;
+// Upper bound of reviews read for the store-filtered hype list.
+const STORE_REVIEWS_LIMIT = 300;
 
 const chunkArray = (items, chunkSize) => {
   const chunks = [];
@@ -34,6 +37,11 @@ const sortProductsByHype = (firstProduct, secondProduct) => {
   return (firstProduct.name || '').localeCompare(secondProduct.name || '', 'de');
 };
 
+const mapProductDoc = (docSnapshot) => ({
+  id: docSnapshot.id,
+  ...docSnapshot.data(),
+});
+
 const getProductsByIds = async (productIds) => {
   const uniqueProductIds = [...new Set(productIds.filter(Boolean))];
 
@@ -47,12 +55,12 @@ const getProductsByIds = async (productIds) => {
     where(documentId(), 'in', productIdBatch)
   ))));
 
-  return snapshots.flatMap((snapshot) => snapshot.docs.map((docSnapshot) => ({
-    id: docSnapshot.id,
-    ...docSnapshot.data(),
-  })));
+  return snapshots.flatMap((snapshot) => snapshot.docs.map(mapProductDoc));
 };
 
+// Store filter: products reviewed at that store, taken from the newest
+// STORE_REVIEWS_LIMIT reviews (index store ASC + createdAt DESC). The cursor of
+// this variant is a numeric offset.
 const getStoreFilteredHypeProducts = async (categoryFilter, lastVisibleDoc, storeFilter) => {
   const storeQueryValues = getStoreQueryValues(storeFilter);
 
@@ -65,7 +73,9 @@ const getStoreFilteredHypeProducts = async (categoryFilter, lastVisibleDoc, stor
 
   const reviewsSnapshot = await getDocs(query(
     collection(db, 'reviews'),
-    where('store', 'in', storeQueryValues)
+    where('store', 'in', storeQueryValues),
+    orderBy('createdAt', 'desc'),
+    limit(STORE_REVIEWS_LIMIT)
   ));
 
   const matchingProductIds = reviewsSnapshot.docs
@@ -85,24 +95,9 @@ const getStoreFilteredHypeProducts = async (categoryFilter, lastVisibleDoc, stor
   };
 };
 
-// ── Helper: Map OFF tags to one of 5 categories ──
-export function mapCategory(offTags = []) {
-  const joined = offTags.map((t) => t.toLowerCase()).join(' ');
-
-  const matchers = [
-    { category: 'Getränke', keywords: ['beverage', 'drink', 'water', 'juice', 'soda', 'coffee', 'tea', 'getränke', 'boisson'] },
-    { category: 'Snacks', keywords: ['snack', 'chip', 'cracker', 'cookie', 'sweet', 'candy', 'chocolate', 'biscuit', 'süßware', 'confiserie'] },
-    { category: 'Kühlware', keywords: ['dairy', 'milk', 'milch', 'cheese', 'käse', 'yogurt', 'joghurt', 'fresh', 'refrigerat', 'kühl', 'meat', 'fleisch', 'wurst'] },
-  ];
-
-  for (const { category, keywords } of matchers) {
-    if (keywords.some((kw) => joined.includes(kw))) return category;
-  }
-
-  return 'Vorrat';
-}
-
 // ── Pagination query for hype products ──
+// `lastDoc` is an opaque cursor: pass it back unchanged to get the next page;
+// `null` means there is no further page.
 export async function getHypeProducts(categoryFilter = null, lastVisibleDoc = null, storeFilter = 'Alle') {
   const normalizedStoreFilter = normalizeStoreName(storeFilter);
 
@@ -110,27 +105,39 @@ export async function getHypeProducts(categoryFilter = null, lastVisibleDoc = nu
     return getStoreFilteredHypeProducts(categoryFilter, lastVisibleDoc, normalizedStoreFilter);
   }
 
-  // Fetch all products sorted by reviewCount, then filter client-side.
-  // Client-side category filtering handles old products that were saved before
-  // the category field existed, so no products are silently excluded.
-  const snapshot = await getDocs(query(
-    collection(db, 'products'),
-    orderBy('reviewCount', 'desc')
-  ));
+  const constraints = [];
 
-  const allProducts = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const filtered = categoryFilter
-    ? allProducts.filter((p) => p.category === categoryFilter)
-    : allProducts;
+  // Uses the composite index category ASC + reviewCount DESC.
+  if (categoryFilter) {
+    constraints.push(where('category', '==', categoryFilter));
+  }
 
-  const offset = typeof lastVisibleDoc === 'number' ? lastVisibleDoc : 0;
-  const docs = filtered.slice(offset, offset + HYPE_PAGE_SIZE);
-  const nextOffset = offset + docs.length;
+  constraints.push(orderBy('reviewCount', 'desc'));
+  constraints.push(limit(HYPE_PAGE_SIZE));
+
+  // A numeric cursor belongs to the store-filtered variant; ignore it here.
+  if (lastVisibleDoc && typeof lastVisibleDoc === 'object') {
+    constraints.push(startAfter(lastVisibleDoc));
+  }
+
+  const snapshot = await getDocs(query(collection(db, 'products'), ...constraints));
+  const pageDocs = snapshot.docs;
 
   return {
-    docs,
-    lastDoc: nextOffset < filtered.length ? nextOffset : null,
+    docs: pageDocs.map(mapProductDoc),
+    lastDoc: pageDocs.length === HYPE_PAGE_SIZE ? pageDocs[pageDocs.length - 1] : null,
   };
+}
+
+// Home strip: the most reviewed products, limited on the server.
+export async function getTrendingProducts(count = 5) {
+  const snapshot = await getDocs(query(
+    collection(db, 'products'),
+    orderBy('reviewCount', 'desc'),
+    limit(count)
+  ));
+
+  return snapshot.docs.map(mapProductDoc);
 }
 
 export async function getNewestProducts() {
@@ -141,22 +148,5 @@ export async function getNewestProducts() {
   );
 
   const snapshot = await getDocs(newestQuery);
-  return snapshot.docs.map((docSnapshot) => ({
-    id: docSnapshot.id,
-    ...docSnapshot.data(),
-  }));
-}
-
-export async function getTopDupes() {
-  const dupesQuery = query(
-    collection(db, 'dupes'),
-    orderBy('matchScore', 'desc'),
-    limit(5)
-  );
-
-  const snapshot = await getDocs(dupesQuery);
-  return snapshot.docs.map((docSnapshot) => ({
-    id: docSnapshot.id,
-    ...docSnapshot.data(),
-  }));
+  return snapshot.docs.map(mapProductDoc);
 }

@@ -1,16 +1,53 @@
-# React + Vite
+# RealGood
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Community app for supermarket products: scan a barcode, rate the product and
+find cheaper alternatives ("dupes") that other users suggested.
 
-Currently, two official plugins are available:
+- Web app: React 19, Vite 7, Tailwind 4, hosted on Vercel
+- Android app: the same web build, packaged with Capacitor 8
+- Backend: Firebase Authentication and Cloud Firestore
+- Product data: Open Food Facts
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Setup
 
-## React Compiler
+```bash
+npm ci
+cp .env.example .env   # fill in the Firebase web app values
+npm run dev
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The app is built for phones. Desktop browsers get a landing page; use the
+device toolbar of the browser to see the app itself.
 
-## Expanding the ESLint configuration
+## Scripts
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+| Command           | Purpose                          |
+| ----------------- | -------------------------------- |
+| `npm run dev`     | Local dev server                 |
+| `npm run lint`    | ESLint                           |
+| `npm run build`   | Production build into `dist/`    |
+| `npm run preview` | Serve the production build       |
+
+## Firestore rules
+
+`firestore.rules` and `firestore.indexes.json` in this repository are the
+source of truth. After a change is merged, publish them:
+
+```bash
+npx firebase-tools deploy --only firestore:rules,firestore:indexes
+```
+
+Anonymous sign-in must be enabled in Firebase Authentication: the app signs
+every visitor in anonymously so that scanned products can be stored, while
+reviews, dupes, votes and reports require a real account.
+
+## Android
+
+```bash
+npm run build
+npx cap sync android
+```
+
+Then open `android/` in Android Studio. Signing material (`*.jks`,
+`keystore.properties`) and `google-services.json` are ignored by git and must
+never be committed.

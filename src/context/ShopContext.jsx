@@ -1,7 +1,7 @@
 // FILE: src/context/ShopContext.jsx
 import { createContext, useCallback, useEffect, useState } from 'react';
-import { MOCK_PRODUCTS, STORES, getStoreQueryValues } from '../data';
-import { db } from '../firebase';
+import { STORES, getStoreQueryValues } from '../data';
+import { auth, db } from '../firebase';
 import {
   addDoc,
   collection,
@@ -12,18 +12,27 @@ import {
   onSnapshot,
   orderBy,
   query,
-  runTransaction,
   serverTimestamp,
-  setDoc,
   startAfter,
   where,
 } from 'firebase/firestore';
+import { signInAnonymously } from 'firebase/auth';
 import {
   getHypeProducts,
   getNewestProducts as fetchNewestProducts,
-  getTopDupes as fetchTopDupes,
-  mapCategory,
+  getTrendingProducts,
 } from '../services/productService';
+import {
+  buildProductFromOpenFoodFacts,
+  getDupeDocId,
+  normalizeBarcode,
+} from '../services/payloads';
+import {
+  createProductIfMissing,
+  writeDupeLink,
+  writeDupeVote,
+  writeReviewWithStats,
+} from '../services/firestoreWrites';
 import {
   isDisplayablePrice,
   validateRealisticPrice,
@@ -32,41 +41,25 @@ import { useAuth } from './useAuth';
 
 const ShopContext = createContext();
 const TOP_DUPES_LIMIT = 5;
+const USER_REVIEWS_LIMIT = 100;
+const OPEN_FOOD_FACTS_FIELDS = 'code,product_name,brands,image_front_url,nutriscore_grade,categories_tags';
 
-const normalizeProductImage = (value) => {
-  if (typeof value !== 'string') {
-    return '';
+// The scanner may create a product from an anonymous session. Waits for the
+// auth state and signs in anonymously once if needed; false = skip the write.
+const ensureSignedInForProductWrite = async () => {
+  try {
+    await auth.authStateReady();
+
+    if (auth.currentUser) {
+      return true;
+    }
+
+    await signInAnonymously(auth);
+    return Boolean(auth.currentUser);
+  } catch (error) {
+    console.warn('Anmeldung für das Speichern des Produkts fehlgeschlagen:', error);
+    return false;
   }
-
-  const trimmedValue = value.trim();
-
-  if (!trimmedValue || trimmedValue.includes('placehold.co')) {
-    return '';
-  }
-
-  return trimmedValue;
-};
-
-const clampPercentage = (value) => Math.min(100, Math.max(0, value));
-
-const normalizeVoteCount = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
-
-const getNormalizedVotes = (votes = {}) => ({
-  up: normalizeVoteCount(votes.up),
-  down: normalizeVoteCount(votes.down),
-});
-
-const calculateInitialDupeMatchScore = (priceSavingsPercentage = 0) => {
-  const normalizedSavings = Number.isFinite(priceSavingsPercentage) ? priceSavingsPercentage : 0;
-  return clampPercentage(Math.round((50 + (normalizedSavings / 2)) * 10) / 10);
-};
-
-const calculateDupeMatchScore = (priceSavingsPercentage = 0, votes = {}) => {
-  const baseScore = calculateInitialDupeMatchScore(priceSavingsPercentage);
-  const normalizedVotes = getNormalizedVotes(votes);
-  const voteAdjustment = (normalizedVotes.up - normalizedVotes.down) * 4;
-
-  return clampPercentage(Math.round((baseScore + voteAdjustment) * 10) / 10);
 };
 
 const buildTopDupesQuery = () => query(
@@ -102,7 +95,6 @@ const mapReviewDoc = (docSnapshot) => {
 
 export const ShopProvider = ({ children }) => {
   const { currentUser } = useAuth();
-  const [products] = useState(MOCK_PRODUCTS);
   const [currentProduct, setCurrentProduct] = useState(null);
   const [trendingProducts, setTrendingProducts] = useState([]);
   const [newestProducts, setNewestProducts] = useState([]);
@@ -110,30 +102,14 @@ export const ShopProvider = ({ children }) => {
   const [recentReviews, setRecentReviews] = useState([]);
   const [isLoadingHome, setIsLoadingHome] = useState(false);
 
-  const [reviews, setReviews] = useState(() => {
-    try {
-      const savedReviews = localStorage.getItem('realgood_reviews');
-      return savedReviews ? JSON.parse(savedReviews) : [];
-    } catch (error) {
-      console.error('Error loading reviews from localStorage:', error);
-      return [];
-    }
-  });
-
+  // Older versions mirrored the user's reviews (personal data) into
+  // localStorage and never read or cleared them. Remove that copy once.
   useEffect(() => {
-    localStorage.setItem('realgood_reviews', JSON.stringify(reviews));
-  }, [reviews]);
-
-  const getNewestProducts = useCallback(async () => {
-    const productsData = await fetchNewestProducts();
-    setNewestProducts(productsData);
-    return productsData;
-  }, []);
-
-  const getTopDupes = useCallback(async () => {
-    const dupesData = await fetchTopDupes();
-    setTopDupes(dupesData);
-    return dupesData;
+    try {
+      localStorage.removeItem('realgood_reviews');
+    } catch {
+      // Storage unavailable (private mode, blocked site data): nothing to clean.
+    }
   }, []);
 
   const subscribeTopDupes = useCallback(() => onSnapshot(
@@ -299,7 +275,8 @@ export const ShopProvider = ({ children }) => {
     const userReviewsQuery = query(
       collection(db, 'reviews'),
       where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(USER_REVIEWS_LIMIT)
     );
 
     const snapshot = await getDocs(userReviewsQuery);
@@ -326,14 +303,12 @@ export const ShopProvider = ({ children }) => {
     try {
       // topDupes are handled by subscribeTopDupes (real-time), so not fetched here.
       const [trendingResult, productsResult, reviewsResult] = await Promise.allSettled([
-        getHypeProducts(),           // trending = top by reviewCount
+        getTrendingProducts(5),      // trending = top 5 by reviewCount (server-side limit)
         fetchNewestProducts(),       // newest = sorted by createdAt
         getRecentReviews(),          // 3 most recent reviews for the social strip
       ]);
 
-      const trendingData = trendingResult.status === 'fulfilled'
-        ? trendingResult.value.docs.slice(0, 5)
-        : [];
+      const trendingData = trendingResult.status === 'fulfilled' ? trendingResult.value : [];
       const productsData = productsResult.status === 'fulfilled' ? productsResult.value : [];
       const reviewsData = reviewsResult.status === 'fulfilled' ? reviewsResult.value : [];
 
@@ -361,16 +336,11 @@ export const ShopProvider = ({ children }) => {
   }, [getRecentReviews]);
 
   // Action: Fetch data from OpenFoodFacts
-  const fetchProductByBarcode = async (barcode) => {
+  const fetchProductByBarcode = async (rawBarcode) => {
     try {
+      const barcode = normalizeBarcode(rawBarcode);
       const response = await fetch(
-        `https://world.openfoodfacts.org/api/v2/product/${barcode}?fields=code,product_name,brands,image_front_url,nutriscore_grade,categories_tags`,
-        {
-          method: 'GET',
-          headers: {
-            'User-Agent': 'RealGoodApp - Student Project - Web'
-          }
-        }
+        `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}?fields=${OPEN_FOOD_FACTS_FIELDS}`
       );
 
       if (!response.ok) {
@@ -379,71 +349,42 @@ export const ShopProvider = ({ children }) => {
 
       const data = await response.json();
 
-      if (data.status === 1 && data.product) {
-        const category = mapCategory(data.product.categories_tags || []);
-        let resolvedProductData = null;
+      if (data.status !== 1 || !data.product) {
+        throw new Error(`Produkt mit Barcode ${barcode} nicht gefunden`);
+      }
 
-        const productData = {
-          id: data.product.code,
-          name: data.product.product_name || 'Unbekanntes Produkt',
-          brand: data.product.brands || 'Marke unbekannt',
-          image: normalizeProductImage(data.product.image_front_url),
-          nutriScore: data.product.nutriscore_grade,
-          category,
-          source: 'api'
-        };
+      const productData = buildProductFromOpenFoodFacts(data.product, barcode);
+      let resolvedProductData = productData;
 
-        // Save product to Firestore without resetting reviewCount or createdAt on repeat scans.
-        try {
-          const productRef = doc(db, 'products', productData.id);
-          const existingSnapshot = await getDoc(productRef);
-          const existingData = existingSnapshot.exists() ? existingSnapshot.data() : {};
-          const storedPrice = getPersistablePrice(existingData?.price);
-          const basePayload = {
-            name: productData.name,
-            brand: productData.brand,
-            image: productData.image,
-            nutriScore: productData.nutriScore || null,
-            category: productData.category,
-            // Lowercase fields enable efficient prefix search queries
-            nameLower: productData.name.toLowerCase(),
-            brandLower: (productData.brand || '').toLowerCase(),
-          };
+      // Create the product document only when it is missing; an existing
+      // document is never rewritten by a scan. If no session is available the
+      // write is skipped: the review transaction can create the product later.
+      try {
+        if (await ensureSignedInForProductWrite()) {
+          const { data: storedData } = await createProductIfMissing(db, productData);
+          const storedPrice = getPersistablePrice(storedData?.price);
 
           resolvedProductData = {
             ...productData,
             ...(storedPrice !== null ? { price: storedPrice } : {}),
-            reviewCount: existingData?.reviewCount || 0,
-            averageRating: existingData?.averageRating || 0,
+            reviewCount: typeof storedData?.reviewCount === 'number' ? storedData.reviewCount : 0,
+            averageRating: typeof storedData?.averageRating === 'number' ? storedData.averageRating : 0,
           };
-
-          await setDoc(
-            productRef,
-            existingSnapshot.exists()
-              ? basePayload
-              : {
-                  ...basePayload,
-                  createdAt: serverTimestamp(),
-                  reviewCount: 0,
-                  averageRating: 0,
-                },
-            { merge: true }
-          );
-        } catch (fsErr) {
-          console.warn("Firestore-Speichern fehlgeschlagen (App läuft weiter):", fsErr);
         }
-
-        setCurrentProduct(resolvedProductData || productData);
-        return resolvedProductData || productData;
-      } else {
-        throw new Error(`Produkt mit Barcode ${barcode} nicht gefunden`);
+      } catch (fsErr) {
+        console.warn('Firestore-Speichern fehlgeschlagen (App läuft weiter):', fsErr);
       }
+
+      setCurrentProduct(resolvedProductData);
+      return resolvedProductData;
     } catch (error) {
-      console.error("Fehler beim Barcode-Lookup:", error);
+      console.error('Fehler beim Barcode-Lookup:', error);
       throw error;
     }
   };
 
+  // Review and product stats are written in one transaction (see
+  // writeReviewWithStats); a missing product document is created with it.
   const addReview = useCallback(async (review, authUser = null) => {
     const priceValidation = validateRealisticPrice(review.price, { allowEmpty: true });
 
@@ -452,75 +393,26 @@ export const ShopProvider = ({ children }) => {
     }
 
     const parsedPrice = priceValidation.parsed;
+    const { reviewId, reviewPayload } = await writeReviewWithStats(db, review, authUser, parsedPrice);
 
-    const reviewPayload = {
-      productId: review.productId,
-      productName: review.productName || 'Unbekanntes Produkt',
-      brand: review.brand || '',
-      image: normalizeProductImage(review.image),
-      rating: review.rating || 0,
-      comment: review.comment || '',
-      price: parsedPrice,
-      store: review.store || null,
-      isDupe: Boolean(review.isDupe),
-      dupeTarget: review.isDupe ? review.dupeTarget || null : null,
-      createdAt: serverTimestamp(),
-      ...(authUser && {
-        userId: authUser.uid,
-        userName: authUser.displayName || 'Foodie',
-        userAvatar: authUser.photoURL || null,
-      }),
-    };
-
-    const reviewRef = await addDoc(collection(db, 'reviews'), reviewPayload);
-
-    if (review.productId) {
-      const productRef = doc(db, 'products', review.productId);
-
-      await runTransaction(db, async (transaction) => {
-        const productSnapshot = await transaction.get(productRef);
-        const existingData = productSnapshot.exists() ? productSnapshot.data() : {};
-        const currentCount = typeof existingData.reviewCount === 'number' ? existingData.reviewCount : 0;
-        const currentAverage = typeof existingData.averageRating === 'number' ? existingData.averageRating : 0;
-        const newCount = currentCount + 1;
-        const newAverage = Math.round(((currentAverage * currentCount) + (review.rating || 0)) / newCount * 10) / 10;
-
-        const productUpdatePayload = {
-          reviewCount: newCount,
-          averageRating: newAverage,
-        };
-
-        if (isDisplayablePrice(parsedPrice)) {
-          productUpdatePayload.price = parsedPrice;
-        }
-
-        transaction.set(productRef, productUpdatePayload, { merge: true });
-      });
-
-      if (isDisplayablePrice(parsedPrice)) {
-        setCurrentProduct((previousProduct) => (
-          previousProduct?.id === review.productId
-            ? { ...previousProduct, price: parsedPrice }
-            : previousProduct
-        ));
-      }
+    if (isDisplayablePrice(parsedPrice)) {
+      setCurrentProduct((previousProduct) => (
+        previousProduct?.id === review.productId
+          ? { ...previousProduct, price: parsedPrice }
+          : previousProduct
+      ));
     }
 
     const newReview = {
       ...reviewPayload,
-      id: reviewRef.id,
+      id: reviewId,
       createdAt: new Date(),
       date: new Date().toISOString(),
     };
 
-    setReviews((prevReviews) => [newReview, ...prevReviews]);
     setRecentReviews((prevReviews) => [newReview, ...prevReviews].slice(0, 3));
     return newReview;
   }, []);
-
-  const getProduct = (barcode) => {
-    return products.find((p) => p.id === barcode);
-  };
 
   const createDupeLink = useCallback(async (originalProduct, dupeProduct) => {
     if (!currentUser?.uid) {
@@ -535,61 +427,29 @@ export const ShopProvider = ({ children }) => {
       throw new Error('Ein Produkt kann nicht mit sich selbst verknüpft werden.');
     }
 
+    // The rules reject a repeated pair anyway; checking first gives a clear message
+    // instead of a generic permission error.
+    const existingDupe = await getDoc(doc(db, 'dupes', getDupeDocId(originalProduct.id, dupeProduct.id)));
+
+    if (existingDupe.exists()) {
+      throw new Error('Diesen Dupe gibt es schon. Du kannst ihn auf der Startseite bewerten.');
+    }
+
     const [originalPrice, dupePrice] = await Promise.all([
       resolveProductPrice(originalProduct),
       resolveProductPrice(dupeProduct),
     ]);
-    const hasValidPriceComparison = isDisplayablePrice(originalPrice) && isDisplayablePrice(dupePrice);
-    const rawSavingsPercentage = hasValidPriceComparison
-      ? ((originalPrice - dupePrice) / originalPrice) * 100
-      : 0;
-    const priceSavingsPercentage = Number.isFinite(rawSavingsPercentage)
-      ? Math.round(rawSavingsPercentage * 10) / 10
-      : 0;
-    const initialMatchScore = calculateDupeMatchScore(priceSavingsPercentage, { up: 1, down: 0 });
-
-    const dupePayload = {
-      originalId: originalProduct.id,
-      originalName: originalProduct.name || 'Unbekanntes Original',
-      originalBrand: originalProduct.brand || '',
-      originalCategory: originalProduct.category || '',
-      originalImage: normalizeProductImage(originalProduct.image),
+    // Dupe and learned prices in one batch: a rejected dupe changes nothing.
+    // The id is `${originalId}_${dupeId}`, so a repeated pair is rejected.
+    const { id: dupeId, payload: dupePayload } = await writeDupeLink(db, {
+      originalProduct,
+      dupeProduct,
       originalPrice,
-      dupeId: dupeProduct.id,
-      dupeName: dupeProduct.name || 'Unbekanntes Produkt',
-      dupeBrand: dupeProduct.brand || '',
-      dupeCategory: dupeProduct.category || '',
-      dupeImage: normalizeProductImage(dupeProduct.image),
       dupePrice,
-      createdBy: currentUser.uid,
-      matchScore: initialMatchScore,
-      priceSavingsPercentage,
-      votes: { up: 1, down: 0 },
-      userVotes: { [currentUser.uid]: 'up' },
-      createdAt: serverTimestamp(),
-    };
-
-    const priceUpdateTasks = [];
-
-    if (isDisplayablePrice(originalPrice)) {
-      priceUpdateTasks.push(
-        setDoc(doc(db, 'products', originalProduct.id), { price: originalPrice }, { merge: true })
-      );
-    }
-
-    if (isDisplayablePrice(dupePrice)) {
-      priceUpdateTasks.push(
-        setDoc(doc(db, 'products', dupeProduct.id), { price: dupePrice }, { merge: true })
-      );
-    }
-
-    if (priceUpdateTasks.length > 0) {
-      await Promise.all(priceUpdateTasks);
-    }
-
-    const dupeRef = await addDoc(collection(db, 'dupes'), dupePayload);
+      uid: currentUser.uid,
+    });
     const createdDupe = {
-      id: dupeRef.id,
+      id: dupeId,
       ...dupePayload,
       createdAt: new Date(),
     };
@@ -641,63 +501,7 @@ export const ShopProvider = ({ children }) => {
       throw new Error('Ungültiger Vote-Typ.');
     }
 
-    const dupeRef = doc(db, 'dupes', dupeId);
-
-    const updatedDupe = await runTransaction(db, async (transaction) => {
-      const dupeSnapshot = await transaction.get(dupeRef);
-
-      if (!dupeSnapshot.exists()) {
-        throw new Error('Dieser Dupe wurde nicht gefunden.');
-      }
-
-      const dupeData = dupeSnapshot.data();
-      const currentVote = dupeData.userVotes?.[currentUser.uid] || null;
-
-      if (currentVote === type) {
-        return {
-          id: dupeSnapshot.id,
-          ...dupeData,
-        };
-      }
-
-      const nextVotes = getNormalizedVotes(dupeData.votes);
-
-      if (currentVote === 'up') {
-        nextVotes.up = Math.max(0, nextVotes.up - 1);
-      }
-
-      if (currentVote === 'down') {
-        nextVotes.down = Math.max(0, nextVotes.down - 1);
-      }
-
-      if (type === 'up') {
-        nextVotes.up += 1;
-      }
-
-      if (type === 'down') {
-        nextVotes.down += 1;
-      }
-
-      const nextUserVotes = {
-        ...(dupeData.userVotes || {}),
-        [currentUser.uid]: type,
-      };
-      const nextMatchScore = calculateDupeMatchScore(dupeData.priceSavingsPercentage, nextVotes);
-
-      transaction.update(dupeRef, {
-        votes: nextVotes,
-        userVotes: nextUserVotes,
-        matchScore: nextMatchScore,
-      });
-
-      return {
-        id: dupeSnapshot.id,
-        ...dupeData,
-        votes: nextVotes,
-        userVotes: nextUserVotes,
-        matchScore: nextMatchScore,
-      };
-    });
+    const updatedDupe = await writeDupeVote(db, dupeId, currentUser.uid, type);
 
     setTopDupes((prevDupes) => prevDupes
       .map((dupe) => (dupe.id === updatedDupe.id ? updatedDupe : dupe))
@@ -708,18 +512,13 @@ export const ShopProvider = ({ children }) => {
   }, [currentUser]);
 
   const value = {
-    products,
-    reviews,
     stores: STORES,
     addReview,
     getFeedActivity,
-    getProduct,
     getProductReviews,
     getUserReviews,
-    getNewestProducts,
     getRecentReviews,
     searchProducts,
-    getTopDupes,
     subscribeTopDupes,
     fetchProductByBarcode,
     loadHomeData,

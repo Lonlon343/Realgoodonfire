@@ -2,6 +2,7 @@ import { useState } from 'react';
 import './App.css';
 import { AuthProvider } from './context/AuthContext';
 import { ShopProvider } from './context/ShopContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoginModal } from './components/LoginModal';
 import { MobileGate } from './components/MobileGate';
 import { Navbar } from './components/layout/Navbar';
@@ -41,17 +42,19 @@ function App() {
   };
 
   return (
-    <MobileGate>
-      <AuthProvider>
-        <ShopProvider>
-          <div className="min-h-screen bg-slate-50 pb-24">
-            {renderView()}
-          </div>
-          <Navbar activeTab={activeTab} onTabChange={setActiveTab} />
-          <LoginModal />
-        </ShopProvider>
-      </AuthProvider>
-    </MobileGate>
+    <ErrorBoundary>
+      <MobileGate>
+        <AuthProvider>
+          <ShopProvider>
+            <div className="min-h-screen bg-slate-50 pb-24">
+              {renderView()}
+            </div>
+            <Navbar activeTab={activeTab} onTabChange={setActiveTab} />
+            <LoginModal />
+          </ShopProvider>
+        </AuthProvider>
+      </MobileGate>
+    </ErrorBoundary>
   );
 }
 

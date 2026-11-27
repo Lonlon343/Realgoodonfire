@@ -1,10 +1,49 @@
 import { ArrowLeft } from 'lucide-react';
 
+// Single place for the legally responsible party. Change it here only.
+const CONTACT = {
+  name: 'Leon Hartling',
+  street: 'Hahnweg 62',
+  city: '96450 Coburg',
+  email: 'leonhartling96@googlemail.com',
+};
+
+const Section = ({ title, children }) => (
+  <section>
+    <h2 className="text-base font-bold text-slate-900 mb-3">{title}</h2>
+    <div className="rounded-squircle bg-white border border-slate-100 shadow-sm px-4 py-4 text-sm text-slate-600 leading-relaxed space-y-3">
+      {children}
+    </div>
+  </section>
+);
+
+const ContactBlock = () => (
+  <div className="space-y-0.5">
+    <p className="font-semibold text-slate-800">{CONTACT.name}</p>
+    <p>{CONTACT.street}</p>
+    <p>{CONTACT.city}</p>
+    <p className="pt-2">
+      E-Mail:{' '}
+      <a
+        href={`mailto:${CONTACT.email}`}
+        className="text-realgreen font-medium underline underline-offset-2"
+      >
+        {CONTACT.email}
+      </a>
+    </p>
+  </div>
+);
+
 export const DatenschutzModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] bg-realbg overflow-y-auto">
+    <div
+      className="fixed inset-0 z-[120] bg-realbg overflow-y-auto overscroll-contain"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="legal-title"
+    >
       {/* Header */}
       <div className="sticky top-0 z-10 bg-realbg/90 backdrop-blur-md border-b border-slate-200/60 px-5 py-4">
         <button
@@ -15,82 +54,173 @@ export const DatenschutzModal = ({ isOpen, onClose }) => {
           <ArrowLeft size={18} />
           Zurück
         </button>
-        <h1 className="mt-3 text-xl font-black text-slate-900 tracking-tight" style={{ fontFamily: 'Poppins, sans-serif' }}>
-          Datenschutz &amp; Impressum
+        <h1
+          id="legal-title"
+          className="mt-3 text-xl font-black text-slate-900 tracking-tight"
+          style={{ fontFamily: 'Poppins, sans-serif' }}
+        >
+          Impressum &amp; Datenschutz
         </h1>
       </div>
 
       {/* Content */}
       <div className="px-5 py-6 pb-24 max-w-2xl mx-auto space-y-8">
+        <Section title="Impressum">
+          <p>Angaben gemäß § 5 DDG, zugleich Verantwortlicher im Sinne der DSGVO:</p>
+          <ContactBlock />
+        </Section>
 
-        <section>
-          <h2 className="text-base font-bold text-slate-900 mb-3">1. Verantwortlicher für die Datenverarbeitung</h2>
-          <div className="rounded-squircle bg-white border border-slate-100 shadow-sm px-4 py-4 text-sm text-slate-600 leading-relaxed space-y-0.5">
-            <p className="font-semibold text-slate-800">Leon Hartling</p>
-            <p>Hahnweg 62</p>
-            <p>96450 Coburg</p>
-            <p className="mt-2">
-              E-Mail:{' '}
-              <a
-                href="mailto:leonhartling96@googlemail.com"
-                className="text-realgreen font-medium underline underline-offset-2"
-              >
-                leonhartling96@googlemail.com
-              </a>
-            </p>
-          </div>
-        </section>
+        <Section title="1. Überblick">
+          <p>
+            RealGood ist eine Community-App: Du scannst Supermarkt-Produkte, bewertest sie und
+            schlägst günstige Alternativen („Dupes“) vor. Diese Erklärung beschreibt, welche Daten
+            dabei verarbeitet werden, wofür und an wen sie gehen.
+          </p>
+        </Section>
 
-        <section>
-          <h2 className="text-base font-bold text-slate-900 mb-3">2. Hosting der App (Vercel)</h2>
-          <div className="rounded-squircle bg-white border border-slate-100 shadow-sm px-4 py-4 text-sm text-slate-600 leading-relaxed">
-            Unsere App wird bei dem Anbieter Vercel Inc. (340 S Lemon Ave #4133, Walnut, CA 91789, USA) gehostet. Wenn du unsere App aufrufst, werden technisch bedingt Verbindungsdaten (wie deine IP-Adresse, Datum und Uhrzeit der Anfrage) an die Server von Vercel übertragen, um die App auf deinem Gerät auszuliefern. Vercel ist Teilnehmer des EU-US Data Privacy Frameworks, wodurch ein angemessenes Datenschutzniveau garantiert wird. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an einer sicheren und schnellen Bereitstellung der App).
-          </div>
-        </section>
+        <Section title="2. Bereitstellung der App">
+          <p>
+            Die Web-Version wird bei Vercel Inc. (340 S Lemon Ave #4133, Walnut, CA 91789, USA)
+            gehostet. Beim Aufruf verarbeitet Vercel technisch notwendige Verbindungsdaten wie
+            deine IP-Adresse sowie Datum und Uhrzeit der Anfrage, um die App auszuliefern.
+            Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an einer
+            sicheren und schnellen Bereitstellung). Vercel ist unter dem EU-US Data Privacy
+            Framework zertifiziert.
+          </p>
+          <p>
+            Die Android-App bringt ihre Dateien selbst mit; beim Start werden keine App-Dateien von
+            Vercel geladen.
+          </p>
+        </Section>
 
-        <section>
-          <h2 className="text-base font-bold text-slate-900 mb-3">3. Registrierung und Login (Firebase Authentication)</h2>
-          <div className="rounded-squircle bg-white border border-slate-100 shadow-sm px-4 py-4 text-sm text-slate-600 leading-relaxed space-y-3">
-            <p>
-              Damit du Bewertungen schreiben oder &ldquo;Dupes&rdquo; vorschlagen kannst, musst du dir ein Konto erstellen. Hierfür nutzen wir den Dienst &ldquo;Firebase Authentication&rdquo; der Google Ireland Limited (Gordon House, Barrow Street, Dublin 4, Irland).
-            </p>
-            <p>
-              Wir erfassen dabei deine E-Mail-Adresse, ein von dir gewähltes Passwort und (falls du den Google-Login nutzt) deinen öffentlichen Profilnamen sowie dein Profilbild. Diese Daten werden ausschließlich zur Verwaltung deines Accounts und zur Sicherstellung der Funktionalität genutzt. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung).
-            </p>
-            <p>
-              <span className="font-semibold text-slate-700">Hinweis zu Cookies/Local Storage:</span> Firebase speichert einen technisch notwendigen Session-Token im lokalen Speicher (Local Storage) deines Geräts, damit du nicht bei jedem App-Start neu eingeloggt werden musst. Es handelt sich hierbei um technisch zwingend erforderliche Daten, für die keine gesonderte Cookie-Einwilligung erforderlich ist.
-            </p>
-          </div>
-        </section>
+        <Section title="3. Anonyme Sitzung">
+          <p>
+            Beim ersten Start legt die App über „Firebase Authentication“ der Google Ireland
+            Limited (Gordon House, Barrow Street, Dublin 4, Irland) automatisch eine anonyme
+            Sitzung an. Sie besteht aus einer zufälligen Kennung ohne Namen oder E-Mail-Adresse und
+            wird im lokalen Speicher deines Geräts abgelegt. Wir brauchen sie, damit gescannte
+            Produkte in der gemeinsamen Produktdatenbank gespeichert werden können und unsere
+            Datenbank vor Missbrauch geschützt ist. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO.
+          </p>
+        </Section>
 
-        <section>
-          <h2 className="text-base font-bold text-slate-900 mb-3">4. Nutzergenerierte Inhalte (Firestore Database)</h2>
-          <div className="rounded-squircle bg-white border border-slate-100 shadow-sm px-4 py-4 text-sm text-slate-600 leading-relaxed">
-            Wenn du Produkte scannst, Bewertungen schreibst oder neue Alternativen (&ldquo;Dupes&rdquo;) vorschlägst, speichern wir diese Informationen in unserer Datenbank. Auch hierfür nutzen wir Google Firebase (Firestore). Diese Daten werden mit deiner eindeutigen Nutzer-ID verknüpft, damit du deine eigenen Beiträge (gemäß unserer Security Rules) bearbeiten oder löschen kannst. Dein gewählter Benutzername sowie deine Bewertungen sind für andere Nutzer der App öffentlich sichtbar. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Nutzung der Community-Funktionen).
-          </div>
-        </section>
+        <Section title="4. Konto und Anmeldung">
+          <p>
+            Um Bewertungen zu schreiben, Dupes vorzuschlagen, abzustimmen oder Inhalte zu melden,
+            brauchst du ein Konto. Auch dafür nutzen wir Firebase Authentication. Bei der
+            Registrierung mit E-Mail verarbeiten wir deine E-Mail-Adresse, dein Passwort (nur als
+            Prüfwert gespeichert) und den von dir gewählten Namen. Bei der Anmeldung mit Google
+            erhalten wir deine E-Mail-Adresse, deinen Google-Profilnamen und dein Profilbild.
+            Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Nutzung der App-Funktionen).
+          </p>
+          <p>
+            Firebase speichert einen technisch notwendigen Anmelde-Token im lokalen Speicher deines
+            Geräts, damit du angemeldet bleibst. Eine Einwilligung ist dafür nicht erforderlich
+            (§ 25 Abs. 2 TDDDG). Tracking- oder Werbe-Cookies setzen wir nicht ein.
+          </p>
+        </Section>
 
-        <section>
-          <h2 className="text-base font-bold text-slate-900 mb-3">5. Datentransfer in Drittländer</h2>
-          <div className="rounded-squircle bg-white border border-slate-100 shadow-sm px-4 py-4 text-sm text-slate-600 leading-relaxed">
-            Wir haben Google (Firebase) so konfiguriert, dass unsere Datenbanken im europäischen Raum gehostet werden. Da die Muttergesellschaft von Google jedoch ihren Sitz in den USA hat, kann ein Datentransfer in die USA nicht gänzlich ausgeschlossen werden. Google Ireland Limited stützt sich hierbei auf die EU-Standardvertragsklauseln sowie das EU-US Data Privacy Framework. Wir haben mit Google einen Vertrag zur Auftragsverarbeitung (AVV) abgeschlossen.
-          </div>
-        </section>
+        <Section title="5. Deine Beiträge und was öffentlich sichtbar ist">
+          <p>
+            Bewertungen, Dupe-Vorschläge, Abstimmungen und Preisangaben speichern wir in der
+            Datenbank „Cloud Firestore“ von Google. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO.
+          </p>
+          <p>
+            <span className="font-semibold text-slate-700">Öffentlich abrufbar</span> sind: deine
+            Bewertungen mit Text, Sternen, Preis und Markt, dein Anzeigename, dein Profilbild
+            (falls vorhanden) sowie eine interne Nutzerkennung. Bei Dupes sind außerdem die
+            Kennung der Person, die ihn eingetragen hat, und die abgegebenen Stimmen je
+            Nutzerkennung abrufbar. Wähle deinen Anzeigenamen deshalb so, wie du öffentlich
+            auftreten möchtest.
+          </p>
+          <p>
+            Gescannte Produkte werden ohne Bezug zu deinem Konto in der gemeinsamen
+            Produktdatenbank gespeichert.
+          </p>
+          <p>
+            Einzelne Bewertungen lassen sich in der App derzeit nicht nachträglich ändern. Du
+            kannst dein Konto samt deiner Bewertungen jederzeit im Profil löschen (siehe
+            Abschnitt 11) oder uns per E-Mail um die Löschung einzelner Beiträge bitten.
+          </p>
+        </Section>
 
-        <section>
-          <h2 className="text-base font-bold text-slate-900 mb-3">6. Kamera-Zugriff (Barcode-Scanner)</h2>
-          <div className="rounded-squircle bg-white border border-slate-100 shadow-sm px-4 py-4 text-sm text-slate-600 leading-relaxed">
-            Um Produkte scannen zu können, benötigt die App Zugriff auf die Kamera deines Geräts. Dieser Zugriff erfolgt nur, nachdem du ihm ausdrücklich zugestimmt hast. Die Kamerafunktion (das Entschlüsseln des Barcodes) wird direkt auf deinem Gerät ausgeführt. Es werden keine Bilder oder Videos aufgenommen, gespeichert oder an unsere Server übertragen. Es wird lediglich die erkannte Ziffernfolge (Barcode) verarbeitet, um das Produkt in unserer Datenbank zu suchen.
-          </div>
-        </section>
+        <Section title="6. Meldungen">
+          <p>
+            Wenn du eine Bewertung meldest, speichern wir die gemeldete Bewertung, den gewählten
+            Grund, deinen optionalen Freitext, den Zeitpunkt und deine Nutzerkennung. Meldungen
+            sind nicht öffentlich; wir nutzen sie ausschließlich zur Prüfung und Moderation.
+            Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO.
+          </p>
+        </Section>
 
-        <section>
-          <h2 className="text-base font-bold text-slate-900 mb-3">7. Deine Rechte</h2>
-          <div className="rounded-squircle bg-white border border-slate-100 shadow-sm px-4 py-4 text-sm text-slate-600 leading-relaxed">
-            Du hast jederzeit das Recht auf unentgeltliche Auskunft über deine gespeicherten personenbezogenen Daten, deren Herkunft und Empfänger und den Zweck der Datenverarbeitung sowie ein Recht auf Berichtigung, Sperrung oder Löschung dieser Daten. Wenn du deinen Account und alle damit verbundenen Daten (Bewertungen etc.) löschen möchtest, kannst du dies jederzeit über eine E-Mail an uns beantragen. RealGood übernimmt keine Haftung für die Richtigkeit der Zutaten oder Allergiehinweise. Bitte überprüfe vor dem Verzehr immer die offizielle Verpackung.
-          </div>
-        </section>
+        <Section title="7. Produktdaten von Open Food Facts">
+          <p>
+            Beim Scannen oder Eingeben eines Barcodes fragt die App die Produktdaten direkt bei
+            Open Food Facts (Association Open Food Facts, 21 rue des Iles, 94100 Saint-Maur-des-
+            Fossés, Frankreich) ab. Dabei werden deine IP-Adresse und der Barcode übertragen.
+            Produktbilder werden ebenfalls von den Servern von Open Food Facts geladen.
+            Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO.
+          </p>
+        </Section>
 
+        <Section title="8. Profilbilder">
+          <p>
+            Hat jemand sich mit Google angemeldet, wird das Profilbild von Servern von Google
+            geladen; dabei wird deine IP-Adresse an Google übertragen. Ohne Profilbild zeigt die
+            App die Anfangsbuchstaben des Namens, ohne dafür einen externen Dienst zu nutzen.
+          </p>
+        </Section>
+
+        <Section title="9. Kamera (Barcode-Scanner)">
+          <p>
+            Zum Scannen braucht die App Zugriff auf die Kamera. Der Zugriff erfolgt erst, nachdem
+            du ihn erlaubt hast. Der Barcode wird direkt auf deinem Gerät erkannt. Es werden keine
+            Bilder oder Videos gespeichert oder übertragen, verarbeitet wird nur die erkannte
+            Ziffernfolge.
+          </p>
+        </Section>
+
+        <Section title="10. Empfänger und Übermittlung in Drittländer">
+          <p>
+            Empfänger deiner Daten sind die genannten Dienstleister: Google (Firebase), Vercel und
+            Open Food Facts. Mit Google besteht ein Vertrag zur Auftragsverarbeitung. Unsere
+            Firestore-Datenbank ist für einen Standort in der EU eingerichtet. Google und Vercel
+            können Daten auch in den USA verarbeiten; beide stützen sich dafür auf das EU-US Data
+            Privacy Framework und auf Standardvertragsklauseln.
+          </p>
+        </Section>
+
+        <Section title="11. Speicherdauer und Löschung">
+          <p>
+            Wir speichern deine Kontodaten und Beiträge, solange dein Konto besteht. Über
+            „Konto löschen“ im Profil entfernst du dein Konto und deine Bewertungen sofort. Von
+            dir eingetragene Dupes und abgegebene Stimmen bleiben ohne Namen erhalten und sind nur
+            noch mit einer Kennung verknüpft, die keinem Konto mehr zugeordnet ist; auf Wunsch
+            löschen wir auch diese. Meldungen löschen wir, sobald sie bearbeitet sind und nicht
+            mehr gebraucht werden.
+          </p>
+        </Section>
+
+        <Section title="12. Deine Rechte">
+          <p>
+            Du hast das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16), Löschung
+            (Art. 17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20)
+            und Widerspruch gegen Verarbeitungen, die auf berechtigtem Interesse beruhen
+            (Art. 21). Schreib uns dazu an die oben genannte E-Mail-Adresse.
+          </p>
+          <p>
+            Außerdem kannst du dich bei einer Datenschutz-Aufsichtsbehörde beschweren (Art. 77
+            DSGVO), zum Beispiel beim Bayerischen Landesamt für Datenschutzaufsicht.
+          </p>
+        </Section>
+
+        <Section title="13. Hinweis zu Produktangaben">
+          <p>
+            Produktdaten, Preise und Bewertungen stammen aus der Community und von Open Food
+            Facts. RealGood übernimmt keine Gewähr für Zutaten, Allergiehinweise oder Preise.
+            Maßgeblich sind immer die Angaben auf der Verpackung.
+          </p>
+        </Section>
       </div>
     </div>
   );

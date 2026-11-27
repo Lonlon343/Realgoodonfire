@@ -5,7 +5,8 @@ import { ReportModal } from './ReportModal';
 import { StarRating } from './StarRating';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
-import { formatTimeAgo, getAvatarUrl } from '../utils/formatters';
+import { formatTimeAgo } from '../utils/formatters';
+import { Avatar } from './Avatar';
 
 export const ProductDetailModal = ({
   isOpen,
@@ -257,10 +258,10 @@ export const ProductDetailModal = ({
                   >
                     <div className="mb-3 flex items-center justify-between gap-3 pr-8">
                       <div className="flex min-w-0 items-center gap-3">
-                        <img
-                          src={getAvatarUrl(review)}
-                          alt={review.userName || 'Foodie'}
-                          className="h-11 w-11 rounded-full bg-slate-100 object-cover"
+                        <Avatar
+                          name={review.userName}
+                          src={review.userAvatar}
+                          className="h-11 w-11 flex-shrink-0 rounded-full"
                         />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-bold text-slate-900">
@@ -300,7 +301,7 @@ export const ProductDetailModal = ({
                       disabled={isLoadingMore}
                       className="inline-flex rounded-squircle border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {isLoadingMore ? 'Lädt...' : 'Weitere 5 laden'}
+                      {isLoadingMore ? 'Lädt …' : 'Weitere 5 laden'}
                     </button>
                   </div>
                 ) : null}

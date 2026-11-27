@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Flag, MessageSquare } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Flag, MessageSquare, RefreshCw } from 'lucide-react';
+import { Avatar } from '../components/Avatar';
 import { ProductDetailModal } from '../components/ProductDetailModal';
 import { ReportModal } from '../components/ReportModal';
 import { StarRating } from '../components/StarRating';
@@ -7,7 +8,10 @@ import { StoreFilterChips } from '../components/StoreFilterChips';
 import { useShop } from '../context/useShop';
 import { useAuth } from '../context/useAuth';
 import { STORE_FILTERS, normalizeStoreName } from '../data';
-import { formatTimeAgo, getAvatarUrl } from '../utils/formatters';
+import { formatTimeAgo } from '../utils/formatters';
+
+const FEED_LOAD_ERROR = 'Der Feed konnte nicht geladen werden. Prüfe deine Verbindung.';
+const FEED_LOAD_MORE_ERROR = 'Weitere Bewertungen konnten nicht geladen werden.';
 
 export const FeedView = ({ onTabChange }) => {
   const { getFeedActivity } = useShop();
@@ -21,6 +25,10 @@ export const FeedView = ({ onTabChange }) => {
   const [reportingReviewId, setReportingReviewId] = useState(null);
   const [hiddenReviewIds, setHiddenReviewIds] = useState([]);
   const [reportToast, setReportToast] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [loadMoreError, setLoadMoreError] = useState('');
+  // Incremented for every fresh load; answers of older requests are ignored.
+  const requestIdRef = useRef(0);
 
   const openProductDetail = (review) => {
     if (!review?.productId) return;
@@ -39,23 +47,33 @@ export const FeedView = ({ onTabChange }) => {
 
   // Reload from the top whenever the store filter changes
   const loadFeed = useCallback(async (store) => {
+    requestIdRef.current += 1;
+    const requestId = requestIdRef.current;
+
     setIsLoading(true);
+    setLoadError('');
+    setLoadMoreError('');
     setFeedItems([]);
     setLastDoc(null);
     setHasMore(true);
 
     try {
       const { reviews, lastVisibleDoc } = await getFeedActivity(null, store);
+      if (requestId !== requestIdRef.current) return;
       setFeedItems(reviews);
       setLastDoc(lastVisibleDoc);
       setHasMore(reviews.length === 15 && Boolean(lastVisibleDoc));
     } catch (error) {
+      if (requestId !== requestIdRef.current) return;
       console.error('Fehler beim Laden des Community-Feeds:', error);
       setFeedItems([]);
       setLastDoc(null);
       setHasMore(false);
+      setLoadError(FEED_LOAD_ERROR);
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [getFeedActivity]);
 
@@ -66,18 +84,25 @@ export const FeedView = ({ onTabChange }) => {
   const handleLoadMore = async () => {
     if (!lastDoc || isLoading) return;
 
+    // A filter change starts a new request id; this answer is then dropped.
+    const requestId = requestIdRef.current;
     setIsLoading(true);
+    setLoadMoreError('');
 
     try {
       const { reviews, lastVisibleDoc } = await getFeedActivity(lastDoc, activeStore);
+      if (requestId !== requestIdRef.current) return;
       setFeedItems((prev) => [...prev, ...reviews]);
       setLastDoc(lastVisibleDoc);
       setHasMore(reviews.length === 15 && Boolean(lastVisibleDoc));
     } catch (error) {
+      if (requestId !== requestIdRef.current) return;
       console.error('Fehler beim Nachladen des Feeds:', error);
-      setHasMore(false);
+      setLoadMoreError(FEED_LOAD_MORE_ERROR);
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -116,7 +141,19 @@ export const FeedView = ({ onTabChange }) => {
       </div>
 
       <div className="px-5 pt-5">
-        {isLoading && feedItems.length === 0 ? (
+        {loadError ? (
+          <div className="rounded-squircle border border-red-100 bg-white px-6 py-10 text-center shadow-sm" role="alert">
+            <p className="text-sm font-medium text-red-600">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => loadFeed(activeStore)}
+              className="mt-4 inline-flex items-center gap-2 rounded-squircle border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-realgreen transition-all hover:border-emerald-300 hover:bg-emerald-100/80"
+            >
+              <RefreshCw size={15} strokeWidth={2} />
+              Nochmal versuchen
+            </button>
+          </div>
+        ) : isLoading && feedItems.length === 0 ? (
           <div className="flex justify-center py-16">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
           </div>
@@ -143,10 +180,10 @@ export const FeedView = ({ onTabChange }) => {
                   >
                     <div className="mb-3 flex items-center justify-between gap-3 pr-8">
                       <div className="flex min-w-0 items-center gap-3">
-                        <img
-                          src={getAvatarUrl(review)}
-                          alt={review.userName || 'Foodie'}
-                          className="h-11 w-11 rounded-full object-cover bg-slate-100"
+                        <Avatar
+                          name={review.userName}
+                          src={review.userAvatar}
+                          className="h-11 w-11 flex-shrink-0 rounded-full"
                         />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-bold text-slate-900">
@@ -197,13 +234,16 @@ export const FeedView = ({ onTabChange }) => {
 
             {hasMore && (
               <div className="pt-6 text-center">
+                {loadMoreError ? (
+                  <p className="mb-2 text-xs font-medium text-red-600" role="alert">{loadMoreError}</p>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleLoadMore}
                   disabled={isLoading}
                   className="text-sm font-semibold text-realgreen transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isLoading ? 'Lädt...' : 'Weitere laden'}
+                  {isLoading ? 'Lädt …' : loadMoreError ? 'Nochmal versuchen' : 'Weitere laden'}
                 </button>
               </div>
             )}

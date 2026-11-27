@@ -8,7 +8,7 @@ const getDisplayScore = (score) => {
 export const DupeSuccessModal = ({
   isOpen,
   initialMatchScore = 0,
-  onViewFeed,
+  onGoHome,
 }) => {
   if (!isOpen) {
     return null;
@@ -17,13 +17,13 @@ export const DupeSuccessModal = ({
   const displayScore = getDisplayScore(initialMatchScore);
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-5">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-5" role="dialog" aria-modal="true" aria-labelledby="dupe-success-title">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-md" />
 
       <div className="relative z-10 w-full max-w-md rounded-squircle bg-white p-6 shadow-2xl animate-pop-in">
         <div className="mb-6 text-center">
           <span className="mb-3 block text-5xl">🎉</span>
-          <h2 className="text-3xl font-bold text-slate-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
+          <h2 id="dupe-success-title" className="text-3xl font-bold text-slate-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
             Dupe eingereicht!
           </h2>
         </div>
@@ -49,21 +49,21 @@ export const DupeSuccessModal = ({
           </div>
 
           <p className="mt-3 text-sm leading-relaxed text-slate-500">
-            Dein System-Startwert liegt bei <span className="font-semibold text-slate-700">{displayScore}%</span> (berechnet aus der Preisersparnis).
+            Dein Match-Score startet bei <span className="font-semibold text-slate-700">{displayScore}%</span> (berechnet aus der Preisersparnis und deiner eigenen Zustimmung).
           </p>
         </div>
 
         <div className="mb-6 rounded-squircle bg-slate-100 px-4 py-4 text-sm leading-relaxed text-slate-600">
           <span className="mb-1 block font-semibold text-slate-800">Was passiert jetzt?</span>
-          Dein Vorschlag ist jetzt im Community-Feed. Wenn andere Foodies zustimmen (👍) und dein Dupe 85% erreicht, wird er offiziell auf der Startseite im 'Dupe Alarm' gefeatured!
+          Dein Dupe ist gespeichert. Der „Dupe Alarm“ auf der Startseite zeigt die fünf Dupes mit dem höchsten Match-Score. Jedes 👍 anderer Foodies hebt den Score, jedes 👎 senkt ihn.
         </div>
 
         <button
           type="button"
-          onClick={onViewFeed}
+          onClick={onGoHome}
           className="w-full rounded-squircle bg-realgreen px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all hover:brightness-105"
         >
-          Zum Feed & Daumen drücken
+          Zur Startseite
         </button>
       </div>
     </div>

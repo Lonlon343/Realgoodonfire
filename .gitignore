@@ -12,6 +12,20 @@ dist
 dist-ssr
 *.local
 
+# Secrets and signing material
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+keystore.properties
+google-services.json
+GoogleService-Info.plist
+
+# Agent worktrees
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

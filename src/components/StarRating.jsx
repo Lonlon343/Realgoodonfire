@@ -16,13 +16,18 @@ export const StarRating = ({
   strokeWidth = 1.7,
   activeClass = 'fill-emerald-500 text-emerald-500',
 }) => {
-  const filled = Math.round(rating || 0);
+  const filled = Math.min(5, Math.max(0, Math.round(rating || 0)));
 
   return (
-    <div className="flex gap-[2px]">
+    <div
+      className="flex gap-[2px]"
+      role="img"
+      aria-label={`${filled} von 5 Sternen`}
+    >
       {[...Array(5)].map((_, i) => (
         <Star
           key={i}
+          aria-hidden="true"
           size={size}
           strokeWidth={strokeWidth}
           className={i < filled ? activeClass : 'text-slate-200'}
