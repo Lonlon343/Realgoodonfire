@@ -47,6 +47,8 @@ export const DesktopLandingView = () => {
               loop
               muted
               playsInline
+              preload="metadata"
+              poster="/demo-poster.jpg"
               src="/demo-video.mp4"
               className="w-full h-full object-cover rounded-[1.8rem]"
             />
