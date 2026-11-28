@@ -27,6 +27,40 @@ device toolbar of the browser to see the app itself.
 | `npm run lint`    | ESLint                           |
 | `npm run build`   | Production build into `dist/`    |
 | `npm run preview` | Serve the production build       |
+| `npm run demo:video` | Record the landing page demo video |
+
+## Demo video
+
+The video in the phone frame of the desktop landing page
+(`public/demo-video.mp4`, poster `public/demo-poster.jpg`) is recorded
+automatically from the real app:
+
+```bash
+npm run demo:video
+```
+
+The command starts the local Firestore and Auth emulators (project
+`demo-realgood`), builds the app in emulator mode into `dist-demo/`, seeds
+demo data, plays a fixed storyboard in a phone-sized headless Chromium
+(home, search, barcode scan with a generated fake camera clip, rating with
+login, dupe vote, hype filter, profile) and encodes the frames to H.264.
+Everything runs offline: the Open Food Facts lookup is answered locally and
+any other request to the internet fails the run. Work files (frames, logs,
+failure screenshots) go to `.demo-video/`.
+
+Requirements:
+
+- Java 21 or newer on `PATH` (Firebase emulators)
+- Playwright Chromium: `npx playwright install chromium`
+- `ffmpeg-static`: its binary is downloaded on the first run (npm with
+  `ignore-scripts` skips the package's own install step)
+- Free ports 8080, 9099 and 4317
+
+All demo content is fictional: products, brands, barcodes (GS1 prefix 20)
+and people are invented, there are no product photos and no real accounts.
+The scripts live in `scripts/demo-video/` and are not part of the app bundle.
+`VITE_USE_EMULATORS=true` switches a build to the emulators; never set it for
+a real build.
 
 ## Firestore rules
 

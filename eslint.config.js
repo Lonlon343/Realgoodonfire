@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'android', 'ios']),
+  globalIgnores(['dist', 'dist-demo', 'android', 'ios']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
@@ -24,6 +24,17 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+    },
+  },
+  {
+    // Node scripts (demo video recording); never imported by src/. Functions
+    // passed to page.evaluate run in the browser, hence both global sets.
+    files: ['scripts/**/*.{js,mjs}'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.node, ...globals.browser },
     },
   },
 ])

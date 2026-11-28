@@ -10,6 +10,9 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# Demo video recording: emulator build and work files
+dist-demo
+.demo-video
 *.local
 
 # Secrets and signing material
